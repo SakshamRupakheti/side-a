@@ -1,0 +1,11 @@
+BETTER_AUTH_URL=http://127.0.0.1:8787
+BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-bytes
+LOCAL_PASSWORD_AUTH=true
+# Optional in development. Configure at least one provider in production.
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+PODCAST_INDEX_KEY=
+PODCAST_INDEX_SECRET=
+
