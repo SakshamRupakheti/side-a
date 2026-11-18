@@ -20,6 +20,8 @@ test(
             GITHUB_CLIENT_SECRET: "test-only",
             GOOGLE_CLIENT_ID: "test-google",
             GOOGLE_CLIENT_SECRET: "test-only",
+            FACEBOOK_CLIENT_ID: "test-facebook",
+            FACEBOOK_CLIENT_SECRET: "test-only",
           },
         },
       ],
@@ -27,6 +29,9 @@ test(
     t.after(() => server.close());
     await server.listen();
     await server.getWorker().applyD1Migrations("DB");
+    const privacyPage = await server.fetch(origin + "/privacy/");
+    assert.equal(privacyPage.status, 200);
+    assert.match(await privacyPage.text(), /id="delete-account"/);
     async function request(
       path,
       method = "GET",
@@ -212,12 +217,47 @@ test(
       new URL(oauth.data.url).searchParams.get("scope"),
       "user:email",
     );
-    const google = await request("/auth/sign-in/social", "POST", {
-      provider: "google",
-      callbackURL: "/",
-      disableRedirect: true,
-    });
-    assert.equal(new URL(google.data.url).hostname, "accounts.google.com");
+    const methods = (await request("/session")).data.methods;
+    for (const [provider, host, scopes] of [
+      ["google", "accounts.google.com", ["email", "openid", "profile"]],
+      ["facebook", "www.facebook.com", ["email", "public_profile"]],
+    ]) {
+      assert.equal(methods[provider], true);
+      const start = await request("/auth/sign-in/social", "POST", {
+        provider,
+        callbackURL: "/",
+        disableRedirect: true,
+      });
+      const consent = new URL(start.data.url);
+      assert.equal(consent.hostname, host);
+      assert.equal(consent.searchParams.get("client_id"), "test-" + provider);
+      assert.deepEqual(
+        consent.searchParams.get("scope").split(" ").sort(),
+        scopes,
+      );
+      const callback = new URL(consent.searchParams.get("redirect_uri"));
+      assert.equal(callback.href, origin + "/api/auth/callback/" + provider);
+      const state = consent.searchParams.get("state");
+      assert.ok(state);
+      callback.search = new URLSearchParams({
+        error: "access_denied",
+        state,
+      }).toString();
+      const canceled = await server.fetch(callback.href, {
+        redirect: "manual",
+        headers: { Cookie: start.cookie },
+      });
+      assert.equal(canceled.status, 302);
+      const retry = new URL(canceled.headers.get("location"));
+      assert.equal(retry.origin, origin);
+      assert.equal(retry.pathname, "/");
+      assert.ok(retry.searchParams.has("signin"));
+      assert.equal(retry.searchParams.get("error"), "access_denied");
+      assert.equal(
+        (await request("/session", "GET", undefined, start.cookie)).data.user,
+        null,
+      );
+    }
     const thresholds = [1, 5, 10, 50, 100];
     for (let count = 2; count <= 100; count++) {
       await request(

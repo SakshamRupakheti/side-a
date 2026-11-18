@@ -22,7 +22,7 @@ Open **http://127.0.0.1:8787**. Choose **Start your diary** to create a local ac
 3. Mark a podcast episode finished to count it toward milestones. Record additional full listens in the replay field. The same provider item can occur once per listener.
 4. Use **Profile settings** to publish the profile, select individual statistics and badges, export JSON, or delete the account. Sign in again if deletion requires a fresh session.
 
-The hosted edition uses Google or GitHub sign-in. Local password sign-up is loopback-only. No streaming-history permission, mail service, payment card, or paid API is needed. Discovery searches Podcast Index with configured keys and falls back to Apple’s directory. Directory results open the show page so listeners can select a specific episode.
+The hosted edition supports Google, Facebook and GitHub sign-in. Each button appears when its server credentials are configured. Returning listeners should use their original provider. Local password sign-up is loopback-only. Discovery searches Podcast Index with configured keys and falls back to Apple’s directory. Directory results open the show page so listeners can select a specific episode.
 
 ## Repository
 

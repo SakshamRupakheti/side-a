@@ -2,6 +2,11 @@ import { useRef, useState } from "react";
 import { ArrowRight, Link2, LockKeyhole } from "lucide-react";
 import { api, ErrorText, Modal, type Session, useAction } from "./ui";
 import {
+  socialProviders,
+  providerNames,
+  type SocialProvider,
+} from "../shared/sign-in";
+import {
   blank,
   emptyProfile,
   statuses,
@@ -14,12 +19,16 @@ type FormProps = { close: () => void; done: () => Promise<void> };
 export function AuthForm({
   session,
   creating,
+  callbackError,
   close,
   done,
-}: { session: Session; creating: boolean } & FormProps) {
+}: { session: Session; creating: boolean; callbackError: string } & FormProps) {
   const act = useAction(),
     [signup, setSignup] = useState(creating);
-  async function social(provider: string) {
+  const enabled = socialProviders.filter(
+    (provider) => session.methods[provider],
+  );
+  async function social(provider: SocialProvider) {
     const res = await api<{ url: string }>("/auth/sign-in/social", "POST", {
       provider,
       callbackURL: "/",
@@ -29,21 +38,19 @@ export function AuthForm({
   }
   return (
     <Modal title={signup ? "Start your diary" : "Welcome back"} close={close}>
-      {(session.methods.github || session.methods.google) && (
+      <ErrorText text={callbackError} />
+      {enabled.length > 0 && (
         <div className="social">
-          {(["github", "google"] as const)
-            .filter((p) => session.methods[p])
-            .map((p) => (
-              <button
-                key={p}
-                disabled={act.busy}
-                className="button"
-                onClick={() => void act.run(() => social(p))}
-              >
-                Continue with {p === "github" ? "GitHub" : "Google"}{" "}
-                <ArrowRight size={16} />
-              </button>
-            ))}
+          {enabled.map((p) => (
+            <button
+              key={p}
+              disabled={act.busy}
+              className="button"
+              onClick={() => void act.run(() => social(p))}
+            >
+              Continue with {providerNames[p]} <ArrowRight size={16} />
+            </button>
+          ))}
         </div>
       )}
       {session.methods.local && (
@@ -98,8 +105,8 @@ export function AuthForm({
       )}
       {!Object.values(session.methods).some(Boolean) && (
         <p>
-          Sign-in is awaiting setup. The site owner must configure a Google or
-          GitHub OAuth client.
+          Sign-in is awaiting setup. The site owner can enable Google, Facebook
+          or GitHub.
         </p>
       )}
       <ErrorText text={act.error} />

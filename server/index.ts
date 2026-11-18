@@ -4,6 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { auth, methods, type Env } from "./auth";
 import { metadata, searchShows } from "./providers";
+import { socialProviders } from "../shared/sign-in";
 import {
   getProfile,
   saveProfile,
@@ -41,12 +42,15 @@ app.use(
 );
 app.on(["POST", "GET"], "/api/auth/*", async (c) => {
   const path = c.req.path.slice("/api/auth".length);
-  if (c.req.method === "GET" && /^\/callback\/(github|google)$/.test(path))
+  if (
+    c.req.method === "GET" &&
+    socialProviders.some((provider) => path === "/callback/" + provider)
+  )
     return auth(c.env).handler(c.req.raw);
   if (c.req.method === "POST" && path === "/sign-in/social") {
     const body = z
       .object({
-        provider: z.enum(["google", "github"]),
+        provider: z.enum(socialProviders),
         callbackURL: z.literal("/"),
         disableRedirect: z.literal(true),
       })

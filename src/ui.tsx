@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { X, AudioLines, ArrowUpRight, BookOpen, Compass } from "lucide-react";
 import type { Profile } from "../shared/diary";
+import type { SocialProvider } from "../shared/sign-in";
 
 export async function api<T>(
   path: string,
@@ -38,7 +39,7 @@ export async function api<T>(
 export type Session = {
   user: { name: string; email: string } | null;
   profile: Profile | null;
-  methods: { local: boolean; github: boolean; google: boolean };
+  methods: Record<SocialProvider | "local", boolean>;
 };
 export const message = (e: unknown) =>
   e instanceof Error ? e.message : "Something went wrong.";

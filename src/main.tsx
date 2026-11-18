@@ -74,6 +74,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(null),
     [modal, setModal] = useState<Dialog>(null);
   const [creating, setCreating] = useState(false);
+  const [callbackError, setCallbackError] = useState("");
   const [selected, setSelected] = useState<Entry>(),
     [draft, setDraft] = useState<Draft>(),
     [error, setError] = useState("");
@@ -116,7 +117,23 @@ function App() {
     setModal(session?.user ? "profile" : "auth");
   }
   useEffect(() => {
-    if (session && new URLSearchParams(location.search).has("signin")) {
+    const query = new URLSearchParams(location.search);
+    if (session && query.has("signin")) {
+      const reason = query.get("error");
+      if (reason) {
+        const messages: Record<string, string> = {
+          access_denied: "Sign-in was canceled. You can try again.",
+          email_not_found:
+            "Your provider didn't share an email address. Allow email access or choose another sign-in method.",
+          account_not_linked:
+            "An account already uses this email. Sign in with the method you used to create your diary.",
+        };
+        setCallbackError(
+          Object.hasOwn(messages, reason)
+            ? messages[reason]
+            : "Sign-in could not be completed. Try again with the provider you used for this diary.",
+        );
+      }
       history.replaceState(null, "", "/");
       setModal(session.user ? "profile" : "auth");
     }
@@ -134,6 +151,7 @@ function App() {
     }
   }
   function close() {
+    setCallbackError("");
     setModal(null);
     setDraft(undefined);
   }
@@ -205,6 +223,7 @@ function App() {
           <div>
             <Brand />
             <span>An open-source listening diary</span>
+            <a href="/privacy/">Privacy &amp; deletion</a>
           </div>
           <span className="footer-note">
             <Headphones size={15} /> Podcasts &amp; audiobooks
@@ -216,6 +235,7 @@ function App() {
           <AuthForm
             session={session}
             creating={creating}
+            callbackError={callbackError}
             close={close}
             done={done}
           />

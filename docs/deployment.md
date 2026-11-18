@@ -1,6 +1,6 @@
 # Cloudflare deployment runbook
 
-The owner needs a Cloudflare Free account and at least one Google or GitHub OAuth client. A free workers.dev hostname is sufficient. Podcast Index credentials are optional. The GitHub Actions workflow only runs checks.
+The owner needs a Cloudflare Free account and a client for each sign-in method they want to offer. Side A supports Google, Facebook and GitHub. A free workers.dev hostname is sufficient. Podcast Index credentials are optional. The GitHub Actions workflow only runs checks.
 
 ## 1. Check the release locally
 
@@ -14,6 +14,7 @@ The origin will be `https://WORKER_NAME.ACCOUNT_SUBDOMAIN.workers.dev`. Use sepa
 
 - **GitHub**. Register an OAuth App in developer settings. Use the site origin as its homepage and append `/api/auth/callback/github` for the authorization callback. Obtain its client ID and secret. The diary needs identity and email access. [Provider configuration](https://better-auth.com/docs/authentication/github)
 - **Google**. Set up the Google Auth Platform branding and audience. Create an OAuth client of type Web application. Register the exact site origin and authorized redirect URI ending in `/api/auth/callback/google`. Add test users while the consent configuration is in testing and publish the audience when ready for general access. [Provider configuration](https://better-auth.com/docs/authentication/google)
+- **Facebook**. Create a Meta app with the Facebook Login use case. Enable web OAuth login, register the site's HTTPS origin and add the exact redirect URI ending in `/api/auth/callback/facebook` to **Valid OAuth Redirect URIs**. Use the App ID as `FACEBOOK_CLIENT_ID` and the App Secret as `FACEBOOK_CLIENT_SECRET`. The app requests `public_profile` and `email`. In the dashboard, supply your operator contact, the site's `/privacy/` page, and `/privacy/#delete-account` as the data deletion instructions URL. Review the published text for your deployment. Test with an app-role account in development mode, then complete the access and publication steps Meta displays for your app before testing a non-role account. [Facebook provider setup](https://better-auth.com/docs/authentication/facebook) · [Meta login permissions](https://developers.facebook.com/docs/graph-api/get-started/)
 - **Podcast Index**. To enable primary discovery, obtain a key and secret from the provider and supply both bindings. Leaving them empty selects Apple’s keyless podcast search. [API registration](https://api.podcastindex.org/)
 
 ## 3. Supply Worker secrets
@@ -23,11 +24,13 @@ Create an ignored `.env.production` containing the following names. Fill values 
 ```dotenv
 BETTER_AUTH_URL=https://WORKER_NAME.ACCOUNT_SUBDOMAIN.workers.dev
 BETTER_AUTH_SECRET=REPLACE_WITH_RANDOM_PRODUCTION_VALUE
-GITHUB_CLIENT_ID=YOUR_CLIENT_ID
-GITHUB_CLIENT_SECRET=YOUR_CLIENT_SECRET
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_WEB_CLIENT_ID
+GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_WEB_CLIENT_SECRET
+FACEBOOK_CLIENT_ID=YOUR_META_APP_ID
+FACEBOOK_CLIENT_SECRET=YOUR_META_APP_SECRET
 ```
 
-For Google, supply `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. At least one complete provider pair is required. For Podcast Index, add `PODCAST_INDEX_KEY` and `PODCAST_INDEX_SECRET`. Vite-prefixed variables are public and must never contain credentials. [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
+Each complete pair enables its button. To offer GitHub as well, supply `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`. For Podcast Index, add `PODCAST_INDEX_KEY` and `PODCAST_INDEX_SECRET`. Use Worker secrets for provider credentials. [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
 
 ## 4. Apply and publish
 

@@ -20,6 +20,8 @@ Hono supports the Workers Fetch API. Drizzle provides a D1 driver and Better Aut
 
 GitHub sign-in needs an OAuth application's client ID and secret. Register the actual origin followed by `/api/auth/callback/github`. GitHub's `user:email` permission lets the provider retrieve a verified email when the user's public profile hides it. Repository access is unnecessary. Google uses a Web application OAuth client with `/api/auth/callback/google`, an OAuth audience and basic identity scopes. Neither integration requires access to listening activity. [GitHub provider setup](https://better-auth.com/docs/authentication/github) · [Google provider setup](https://better-auth.com/docs/authentication/google)
 
+Facebook Login uses the Meta App ID and App Secret with `/api/auth/callback/facebook`. Its public profile and email scopes support account creation and returning sign-in. Facebook may omit email when the user declines the permission or the account lacks a usable address. Existing diary owners should return with their original provider. [Facebook sign-in](https://better-auth.com/docs/authentication/facebook)
+
 ## Metadata and discovery
 
 - **Spotify.** Its public oEmbed endpoint accepts episode URLs and can supply a title and thumbnail. The documented response omits the show and creator. Keep those fields editable. Metadata availability depends on the episode, and the direct source link remains useful if lookup fails. [Spotify oEmbed](https://developer.spotify.com/documentation/embeds/reference/oembed)
