@@ -1,0 +1,32 @@
+# Hosting and provider limits
+
+Documentation checked November 17, 2026. The owner can run Side A locally using Wrangler's local D1 database. The hosted configuration uses one Workers Free account, one D1 database and a `workers.dev` address. Cloudflare offers the free plan without a payment card. [Cloudflare Workers](https://www.cloudflare.com/products/workers/) · [Developer platform pricing](https://www.cloudflare.com/plans/developer-platform/)
+
+## Capacity on the free plan
+
+| Resource | Included capacity | What to measure |
+| --- | --- | --- |
+| Dynamic Worker requests | 100,000 per account per UTC day, 10 ms CPU per invocation | Auth, diary writes, public-profile reads and discovery requests each consume requests. Network and database waits are separate from CPU time. [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) |
+| Frontend assets | Free, unlimited requests for files served directly by Workers Static Assets | Keep asset requests on the static-serving path. [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) |
+| D1 reads and writes | 5 million rows read and 100,000 rows written per account per day | Check the database's Row Metrics. A single query can scan many rows. Changes to indexed columns can each add a billed row write for the index. Daily quota exhaustion causes queries to fail until the next reset. [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/) |
+| D1 storage | 500 MB per database, 5 GB across the account, 10 databases | Text notes, auth sessions, provider links and indexes consume storage. Free Time Travel covers seven days and may retain recently deleted data during that window. [D1 limits](https://developers.cloudflare.com/d1/platform/limits/) |
+| GitHub Actions | Standard hosted runners are free for public repositories. GitHub Free private repositories share 2,000 included runner minutes per month across the account. | Use the standard Linux runner. The same checks can run locally. [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions) |
+
+For example, 100 daily listeners making 20 dynamic requests each would generate 2,000 Worker requests per day. Measure D1 rows read and written during a representative session before estimating the number of listeners the database can serve. A long journal or a popular public profile can change the average substantially.
+
+## Runtime and accounts
+
+Hono supports the Workers Fetch API. Drizzle provides a D1 driver and Better Auth provides a SQLite-compatible Drizzle adapter. Apply checked-in migrations to local D1 first when changing auth versions or plugins. [Cloudflare Hono guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/more-web-frameworks/hono/) · [Drizzle D1 driver](https://orm.drizzle.team/docs/sqlite/connect-cloudflare-d1) · [Better Auth Drizzle adapter](https://better-auth.com/docs/adapters/drizzle)
+
+GitHub sign-in needs an OAuth application's client ID and secret. Register the actual origin followed by `/api/auth/callback/github`. GitHub's `user:email` permission lets the provider retrieve a verified email when the user's public profile hides it. Repository access is unnecessary. Google uses a Web application OAuth client with `/api/auth/callback/google`, an OAuth audience and basic identity scopes. Neither integration requires access to listening activity. [GitHub provider setup](https://better-auth.com/docs/authentication/github) · [Google provider setup](https://better-auth.com/docs/authentication/google)
+
+## Metadata and discovery
+
+- **Spotify.** Its public oEmbed endpoint accepts episode URLs and can supply a title and thumbnail. The documented response omits the show and creator. Keep those fields editable. Metadata availability depends on the episode, and the direct source link remains useful if lookup fails. [Spotify oEmbed](https://developer.spotify.com/documentation/embeds/reference/oembed)
+- **YouTube.** The provider's oEmbed endpoint accepts a video URL and can supply the video title, channel name and thumbnail without a YouTube Data API key. A channel name can differ from the podcast's title. Restricted or removed videos can fail lookup. Display available text and use the original watch page for playback. [YouTube example in the oEmbed specification](https://oembed.com/#section5.1)
+- **Podcast Index.** The `search/byterm` endpoint finds shows. Obtain a free key and secret for the signed API. Requests carry an identifying user agent, a timestamp in Unix seconds, the key and a SHA-1 digest of the key, secret and timestamp in that order, as required by the provider. [API reference](https://podcastindex-org.github.io/docs-api/) · [Provider authentication example](https://github.com/Podcastindex-org/example-code) · [Key registration](https://api.podcastindex.org/)
+- **Apple fallback.** Apple's iTunes Search API supports `media=podcast` and `entity=podcast` with no API key. Its published allowance is approximately 20 calls per minute, subject to change. Search results vary by storefront. Apple limits use of promotional media, including artwork and previews, to promoting its store content. [Apple Search API and usage terms](https://performance-partners.apple.com/search-api)
+
+## Listening history
+
+The diary records the listener's own entries. Spotify's recently played endpoint excludes podcast episodes, and YouTube's Data API does not expose watch history. A badge reflects the user's logged completions. Spotify Extended Streaming History and Google Takeout are downloadable archives that a future importer could process with the listener's consent. [Spotify recently played endpoint](https://developer.spotify.com/documentation/web-api/reference/get-recently-played) · [YouTube API history](https://developers.google.com/youtube/data/revision_history) · [Spotify data exports](https://support.spotify.com/us/article/understanding-your-data/) · [Google data exports](https://support.google.com/accounts/answer/3024190)
