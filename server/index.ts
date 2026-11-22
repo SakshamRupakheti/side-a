@@ -47,7 +47,10 @@ app.on(["POST", "GET"], "/api/auth/*", async (c) => {
     socialProviders.some((provider) => path === "/callback/" + provider)
   )
     return auth(c.env).handler(c.req.raw);
-  if (c.req.method === "POST" && path === "/sign-in/social") {
+  if (
+    c.req.method === "POST" &&
+    ["/sign-in/social", "/link-social"].includes(path)
+  ) {
     const body = z
       .object({
         provider: z.enum(socialProviders),
@@ -78,6 +81,15 @@ app.get("/api/session", async (c) => {
   const data = await auth(c.env).api.getSession({ headers: c.req.raw.headers });
   return c.json({
     methods: methods(c.env),
+    linkedProviders: data
+      ? (
+          await c.env.DB.prepare(
+            "SELECT provider_id FROM account WHERE user_id = ?",
+          )
+            .bind(data.user.id)
+            .all<{ provider_id: string }>()
+        ).results.map((row) => row.provider_id)
+      : [],
     user: data ? { name: data.user.name, email: data.user.email } : null,
     profile: data ? await getProfile(c.env.DB, data.user.id) : null,
   });

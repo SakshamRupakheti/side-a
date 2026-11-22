@@ -126,7 +126,7 @@ function App() {
           email_not_found:
             "Your provider didn't share an email address. Allow email access or choose another sign-in method.",
           account_not_linked:
-            "An account already uses this email. Sign in with the method you used to create your diary.",
+            "An account already uses this email. Sign in with your original method, then connect the provider in Profile settings.",
         };
         setCallbackError(
           Object.hasOwn(messages, reason)
@@ -247,7 +247,12 @@ function App() {
           </section>
         ))}
       {modal === "profile" && session && (
-        <ProfileForm session={session} close={close} done={done} />
+        <ProfileForm
+          session={session}
+          callbackError={callbackError}
+          close={close}
+          done={done}
+        />
       )}
       {modal === "entry" && (
         <EntryForm initial={draft} entry={selected} close={close} done={done} />

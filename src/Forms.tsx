@@ -16,6 +16,17 @@ import {
 } from "../shared/diary";
 
 type FormProps = { close: () => void; done: () => Promise<void> };
+async function startProvider(
+  provider: SocialProvider,
+  path: "/auth/sign-in/social" | "/auth/link-social",
+) {
+  const res = await api<{ url: string }>(path, "POST", {
+    provider,
+    callbackURL: "/",
+    disableRedirect: true,
+  });
+  window.location.assign(res.url);
+}
 export function AuthForm({
   session,
   creating,
@@ -28,14 +39,6 @@ export function AuthForm({
   const enabled = socialProviders.filter(
     (provider) => session.methods[provider],
   );
-  async function social(provider: SocialProvider) {
-    const res = await api<{ url: string }>("/auth/sign-in/social", "POST", {
-      provider,
-      callbackURL: "/",
-      disableRedirect: true,
-    });
-    window.location.assign(res.url);
-  }
   return (
     <Modal title={signup ? "Start your diary" : "Welcome back"} close={close}>
       <ErrorText text={callbackError} />
@@ -46,7 +49,9 @@ export function AuthForm({
               key={p}
               disabled={act.busy}
               className="button"
-              onClick={() => void act.run(() => social(p))}
+              onClick={() =>
+                void act.run(() => startProvider(p, "/auth/sign-in/social"))
+              }
             >
               Continue with {providerNames[p]} <ArrowRight size={16} />
             </button>
@@ -115,9 +120,10 @@ export function AuthForm({
 }
 export function ProfileForm({
   session,
+  callbackError,
   close,
   done,
-}: { session: Session } & FormProps) {
+}: { session: Session; callbackError: string } & FormProps) {
   const [p, set] = useState<Profile>(
     session.profile || {
       ...emptyProfile,
@@ -197,6 +203,26 @@ export function ProfileForm({
         </button>
       </form>
       <div className="account-tools">
+        <ErrorText text={callbackError} />
+        {socialProviders
+          .filter((provider) => session.methods[provider])
+          .map((provider) =>
+            session.linkedProviders.includes(provider) ? (
+              <span key={provider}>{providerNames[provider]} connected</span>
+            ) : (
+              <button
+                key={provider}
+                disabled={act.busy}
+                onClick={() =>
+                  void act.run(() =>
+                    startProvider(provider, "/auth/link-social"),
+                  )
+                }
+              >
+                Connect {providerNames[provider]}
+              </button>
+            ),
+          )}
         <a href="/api/me/export" download>
           Export my data
         </a>

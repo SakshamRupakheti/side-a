@@ -218,6 +218,18 @@ test(
       "user:email",
     );
     const methods = (await request("/session")).data.methods;
+    const linkGoogle = {
+      provider: "google",
+      callbackURL: "/",
+      disableRedirect: true,
+    };
+    await request("/auth/link-social", "POST", linkGoogle, "", 401);
+    const link = await request("/auth/link-social", "POST", linkGoogle, a);
+    assert.equal(new URL(link.data.url).hostname, "accounts.google.com");
+    assert.deepEqual(
+      (await request("/session", "GET", undefined, a)).data.linkedProviders,
+      ["credential"],
+    );
     for (const [provider, host, scopes] of [
       ["google", "accounts.google.com", ["email", "openid", "profile"]],
       ["facebook", "www.facebook.com", ["email", "public_profile"]],

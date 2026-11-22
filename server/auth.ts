@@ -61,7 +61,10 @@ function buildAuth(env: Env) {
       }),
     },
     rateLimit: { enabled: true, storage: "database" },
-    account: { accountLinking: { enabled: false }, encryptOAuthTokens: true },
+    account: {
+      accountLinking: { enabled: true, disableImplicitLinking: true },
+      encryptOAuthTokens: true,
+    },
     advanced: { ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] } },
   });
 }

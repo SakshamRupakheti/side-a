@@ -37,6 +37,7 @@ export async function api<T>(
   return data as T;
 }
 export type Session = {
+  linkedProviders: string[];
   user: { name: string; email: string } | null;
   profile: Profile | null;
   methods: Record<SocialProvider | "local", boolean>;
