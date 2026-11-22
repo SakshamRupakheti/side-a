@@ -17,8 +17,8 @@ Open **http://127.0.0.1:8787**. Choose **Sign in** and **Create a new diary** to
 
 ## Use the diary
 
-1. Choose **Log a listen**. Paste a Spotify episode or YouTube video link to retrieve its available metadata. A publisher URL or a manually entered title also works.
-2. Choose a format and status. Private notes stay in the owner view. A public takeaway is visible after the listener shares the entry and publishes the profile.
+1. Choose **Add a listen** and save a title, or paste a source link and select **Import details**. Review the cover, creator, category, original description and duration. You can supply any missing details.
+2. Use **Reflection** to describe the listen in your own words and record what stayed with you. **Moments** accepts optional timestamps in HH:MM:SS. Open the saved title in your archive to revisit it. Descriptions, reflections, moments and notes are private. A public takeaway appears when you share the entry and publish your profile.
 3. Mark a podcast episode finished to count it toward milestones. Record additional full listens in the replay field. The same provider item can occur once per listener.
 4. Use **Profile settings** to publish the profile, select individual statistics and badges, export JSON, or delete the account. Sign in again if deletion requires a fresh session.
 

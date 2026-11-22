@@ -1,4 +1,5 @@
 import type { Env } from "./auth";
+import { richDetails, publisherHosts } from "./media-details.ts";
 import { HTTPException } from "hono/http-exception";
 
 const bad = (message: string) => new HTTPException(400, { message });
@@ -66,7 +67,8 @@ export function safeArt(raw: string) {
       !u.username &&
       !u.password &&
       !u.port &&
-      /\.(scdn\.co|spotifycdn\.com|ytimg\.com)$/.test(u.hostname)
+      (/\.(scdn\.co|spotifycdn\.com|ytimg\.com)$/.test(u.hostname) ||
+        publisherHosts.includes(u.hostname))
       ? u.href
       : "";
   } catch {
@@ -82,15 +84,32 @@ async function json(url: URL, headers?: Record<string, string>) {
   if (!res.ok) throw new Error("Provider unavailable");
   return res.json();
 }
-export async function metadata(raw: string) {
+export async function metadata(raw: string, env: Partial<Env> = {}) {
   const src = parseSource(raw);
   const fallback = {
     url: src.url,
     title: "",
     creator: "",
     artwork: "",
+    source_description: "",
+    duration_seconds: null as number | null,
     available: false,
   };
+  const rich = await richDetails(src, env).catch(() => null);
+  if (
+    rich &&
+    (rich.title ||
+      rich.creator ||
+      rich.artwork ||
+      rich.source_description ||
+      rich.duration_seconds)
+  )
+    return {
+      ...fallback,
+      ...rich,
+      artwork: safeArt(rich.artwork),
+      available: true,
+    };
   if (!["spotify", "youtube"].includes(src.provider)) return fallback;
   const endpoint = new URL(
     src.provider === "spotify"

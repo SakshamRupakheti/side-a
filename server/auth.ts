@@ -16,6 +16,9 @@ export interface Env {
   FACEBOOK_CLIENT_SECRET?: string;
   PODCAST_INDEX_KEY?: string;
   PODCAST_INDEX_SECRET?: string;
+  YOUTUBE_DATA_API_KEY?:string;
+  SPOTIFY_CLIENT_ID?:string;
+  SPOTIFY_CLIENT_SECRET?:string;
 }
 export function methods(env: Env) {
   const url = new URL(env.BETTER_AUTH_URL);

@@ -270,7 +270,22 @@ test(
         null,
       );
     }
+    const experience = {
+      source_description: "The original synopsis.",
+      duration_seconds: 10800,
+      personal_description: "My private summary.\nSecond line.",
+      reflection: "The thought that followed me home.",
+      moments: [
+        {
+          timestamp: "01:24:30",
+          title: "Learning",
+          description: "My timestamped reflection.",
+        },
+        { timestamp: "", title: "The ending", description: "" },
+      ],
+    };
     const documentary = {
+      experience,
       ...base,
       url: "https://www.nfb.ca/film/universe/",
       title: "Universe",
@@ -279,27 +294,96 @@ test(
       status: "finished",
       shared: true,
     };
+    for (const timestamp of ["3:00", "00:61:00", "03:00:01"]) {
+      await request(
+        "/me/entries",
+        "POST",
+        {
+          ...documentary,
+          experience: {
+            ...experience,
+            moments: [{ ...experience.moments[0], timestamp }],
+          },
+        },
+        a,
+        400,
+      );
+    }
+    await request(
+      "/me/entries",
+      "POST",
+      { ...documentary, experience: { ...experience, duration_seconds: 0 } },
+      a,
+      400,
+    );
     const film = await request("/me/entries", "POST", documentary, a, 201);
     const privateFilm = (
       await request("/me/diary", "GET", undefined, a)
     ).data.entries.find((e) => e.id === film.data.id);
     assert.equal(privateFilm.kind, "documentary");
     assert.equal(privateFilm.note, base.note);
+    assert.deepEqual(privateFilm.experience, experience);
+    const exportFilm = (
+      await request("/me/export", "GET", undefined, a)
+    ).data.entries.find((e) => e.id === film.data.id);
+    assert.deepEqual(exportFilm.experience, experience);
+    assert.ok(
+      !(await request("/me/diary", "GET", undefined, b)).data.entries.some(
+        (e) => e.id === film.data.id,
+      ),
+    );
     const publishedFilm = (await request("/u/mira")).data.entries.find(
       (e) => e.title === "Universe",
     );
     assert.equal(publishedFilm.kind, "documentary");
     assert.ok(!Object.hasOwn(publishedFilm, "note"));
+    assert.ok(!Object.hasOwn(publishedFilm, "experience"));
+    assert.ok(
+      !JSON.stringify(publishedFilm).includes(
+        experience.moments[0].description,
+      ),
+    );
+    const legacy = { ...documentary };
+    delete legacy.experience;
     await request(
       "/me/entries/" + film.data.id,
       "PUT",
-      { ...documentary, revision: 1, shared: false },
+      { ...legacy, revision: 1, shared: false },
       a,
     );
     assert.ok(
       !(await request("/u/mira")).data.entries.some(
         (e) => e.title === "Universe",
       ),
+    );
+    const path = "/me/entries/" + film.data.id;
+    const preserved = (
+      await request("/me/diary", "GET", undefined, a)
+    ).data.entries.find((e) => e.id === film.data.id);
+    assert.deepEqual(preserved.experience, experience);
+    const revised = {
+      ...experience,
+      reflection: "An updated thought.",
+      moments: [experience.moments[1]],
+    };
+    await request(
+      path,
+      "PUT",
+      { ...documentary, experience: revised, revision: 2 },
+      b,
+      404,
+    );
+    await request(
+      path,
+      "PUT",
+      { ...documentary, experience: revised, revision: 2, shared: false },
+      a,
+    );
+    assert.deepEqual(
+      (await request("/me/diary", "GET", undefined, a)).data.entries.find(
+        (e) => e.id === film.data.id,
+      ).experience,
+      revised,
     );
     const thresholds = [1, 5, 10, 50, 100];
     for (let count = 2; count <= 100; count++) {

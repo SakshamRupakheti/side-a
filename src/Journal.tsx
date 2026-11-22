@@ -1,3 +1,4 @@
+import { RecordView } from "./RecordView";
 import { SharePoster } from "./SharePoster";
 import { coverFor } from "./picks";
 import { useState } from "react";
@@ -85,6 +86,7 @@ export function Journal({
   settings: () => void;
 }) {
   const [filter, setFilter] = useState<Status | "all">("all");
+  const [reading, setReading] = useState<Entry | null>(null);
   const filtered = items.filter((e) => filter === "all" || e.status === filter);
   return (
     <>
@@ -100,7 +102,7 @@ export function Journal({
           </div>
           <button className="button primary" onClick={() => add("podcast")}>
             <Plus size={17} />
-            Log a listen
+            Add a listen
           </button>
         </div>
         {profile?.published ? (
@@ -154,7 +156,14 @@ export function Journal({
                     <small>
                       {statuses[e.status]} · {e.kind}
                     </small>
-                    <h3>{e.title}</h3>
+                    <h3>
+                      <button
+                        className="record-title"
+                        onClick={() => setReading(e)}
+                      >
+                        {e.title}
+                      </button>
+                    </h3>
                     <p>
                       {[e.show_name, e.creator].filter(Boolean).join(" · ")}
                     </p>
@@ -203,6 +212,16 @@ export function Journal({
           </section>
         ))}
       </section>
+      {reading && (
+        <RecordView
+          entry={reading}
+          close={() => setReading(null)}
+          edit={() => {
+            setReading(null);
+            edit(reading);
+          }}
+        />
+      )}
       <Badges all values={milestones.filter((n) => n <= stats.finished)} />
     </>
   );

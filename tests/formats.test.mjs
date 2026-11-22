@@ -36,6 +36,22 @@ test("documentary migration preserves legacy records, sources, privacy and clean
       db.prepare("SELECT * FROM entry ORDER BY id").all(),
       before,
     );
+    db.exec(
+      readFileSync(
+        new URL("../migrations/0003_entry_experience.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    assert.deepEqual(
+      db
+        .prepare("SELECT * FROM entry ORDER BY id")
+        .all()
+        .map(({ experience, ...row }) => {
+          assert.equal(experience, null);
+          return { ...row };
+        }),
+      before.map((row) => ({ ...row })),
+    );
     assert.equal(db.prepare("SELECT count(*) AS n FROM source").get().n, 2);
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
     db.exec("DELETE FROM user WHERE id='u'");

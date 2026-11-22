@@ -1,3 +1,4 @@
+import { emptyExperience, type Experience } from "./experience";
 export const formats = ["podcast", "audiobook", "documentary"] as const;
 export const rooms = {
   podcast: "Podcast diary",
@@ -11,6 +12,7 @@ export const statuses = {
 } as const;
 export type Status = keyof typeof statuses;
 export interface Draft {
+  experience: Experience;
   url: string;
   title: string;
   creator: string;
@@ -51,6 +53,7 @@ export const emptyProfile: Profile = {
   show_badges: false,
 };
 export const blank: Draft = {
+  experience: emptyExperience,
   url: "",
   title: "",
   creator: "",

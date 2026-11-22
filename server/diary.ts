@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  emptyExperience,
+  timestampSeconds,
+  type Experience,
+} from "../shared/experience";
 import { HTTPException } from "hono/http-exception";
 import { parseSource, safeArt } from "./providers";
 import {
@@ -27,6 +32,45 @@ export const profileInput = z.object({
   show_badges: z.boolean(),
 });
 export const entryInput = z.object({
+  experience: z
+    .object({
+      source_description: line(8000),
+      duration_seconds: z.number().int().positive().max(35999999).nullable(),
+      personal_description: line(8000),
+      reflection: line(8000),
+      moments: z
+        .array(
+          z.object({
+            timestamp: line(10),
+            title: line(140),
+            description: line(1500),
+          }),
+        )
+        .max(24),
+    })
+    .superRefine((value, ctx) => {
+      value.moments.forEach((moment, index) => {
+        const seconds = timestampSeconds(moment.timestamp);
+        if (
+          moment.timestamp &&
+          (seconds === null ||
+            (value.duration_seconds !== null &&
+              seconds > value.duration_seconds))
+        )
+          ctx.addIssue({
+            code: "custom",
+            path: ["moments", index, "timestamp"],
+            message: "Enter HH:MM:SS within the duration of this listen.",
+          });
+        if (!moment.title && !moment.description && !moment.timestamp)
+          ctx.addIssue({
+            code: "custom",
+            path: ["moments", index],
+            message: "Add a title, description, or timestamp for this moment.",
+          });
+      });
+    })
+    .optional(),
   url: line(2048),
   title: line(250).min(1, "Enter a title."),
   creator: line(180),
@@ -34,7 +78,7 @@ export const entryInput = z.object({
   artwork: line(2048)
     .refine(
       (s) => !s || Boolean(safeArt(s)),
-      "Use a Spotify or YouTube thumbnail URL.",
+      "Use artwork from a supported media provider or leave it blank.",
     )
     .transform(safeArt),
   kind: z.enum(formats),
@@ -107,13 +151,19 @@ export async function entries(db: D1Database, owner: string) {
     .prepare(
       "SELECT " +
         publicColumns +
-        ",e.id,e.note,e.replays,e.shared,e.finished_at,e.revision" +
+        ",e.id,e.note,e.replays,e.shared,e.finished_at,e.revision,e.experience" +
         sourceJoin +
         "WHERE e.owner=? ORDER BY e.updated_at DESC,e.id",
     )
     .bind(owner)
-    .all<Entry>();
-  return results.map((e) => ({ ...e, shared: !!e.shared }));
+    .all<Omit<Entry, "experience"> & { experience: string | null }>();
+  return results.map((e) => ({
+    ...e,
+    shared: !!e.shared,
+    experience: e.experience
+      ? (JSON.parse(e.experience) as Experience)
+      : emptyExperience,
+  }));
 }
 export async function statistics(
   db: D1Database,
@@ -207,12 +257,13 @@ export async function createEntry(db: D1Database, owner: string, e: Input) {
         .prepare(
           "INSERT INTO entry(id,owner,media_id,provider,external_id," +
             columns +
-            ",finished_at,created_at,updated_at) SELECT ?,?,media_id,provider,external_id,?,?,?,?,?,?,?,?,?,?,?,?,?,? FROM source WHERE provider=? AND external_id=?",
+            ",experience,finished_at,created_at,updated_at) SELECT ?,?,media_id,provider,external_id,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? FROM source WHERE provider=? AND external_id=?",
         )
         .bind(
           id,
           owner,
           ...attributes(e),
+          e.experience ? JSON.stringify(e.experience) : null,
           e.status === "finished" ? now : null,
           now,
           now,
@@ -263,10 +314,11 @@ export async function updateEntry(
           .split(",")
           .map((f) => f + "=?")
           .join(",") +
-        ",finished_at=coalesce(finished_at,?),updated_at=?,revision=revision+1 WHERE owner=? AND id=? AND revision=?",
+        ",experience=coalesce(?,experience),finished_at=coalesce(finished_at,?),updated_at=?,revision=revision+1 WHERE owner=? AND id=? AND revision=?",
     )
     .bind(
       ...attributes(e),
+      e.experience ? JSON.stringify(e.experience) : null,
       e.status === "finished" ? now : null,
       now,
       owner,

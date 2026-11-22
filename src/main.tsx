@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AudioLines, Headphones } from "lucide-react";
 import { api, Brand, Header, message, type Session } from "./ui";
-import { AuthForm, EntryForm, ProfileForm } from "./Forms";
+import { AuthForm, ProfileForm } from "./Forms";
 import { Shelf, Discover } from "./Shelf";
 import { Journal, Published } from "./Journal";
 import {
@@ -19,7 +19,9 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import { Entrance } from "./Entrance";
 import { picks, draftFromPick } from "./picks";
 import { ListeningDeck } from "./ListeningDeck";
+import { EntryComposer } from "./EntryComposer";
 import "./style.css";
+import "./composer.css";
 
 type Dialog = "auth" | "profile" | "entry" | null;
 function App() {
@@ -81,6 +83,22 @@ function App() {
       const pending = picks.find(
         (p) => p.art === sessionStorage.getItem("pofolio-pending"),
       );
+      const handoff = sessionStorage.getItem("pofolio-compose-handoff");
+      if (handoff) {
+        sessionStorage.removeItem("pofolio-compose-handoff");
+        try {
+          const saved = JSON.parse(handoff);
+          if (saved.expires > Date.now() && saved.draft?.experience) {
+            setSelected(undefined);
+            setDraft(saved.draft);
+            setFocusNote(false);
+            setModal(s.profile ? "entry" : "profile");
+            return s;
+          }
+        } catch {
+          /* Discard an incomplete handoff. */
+        }
+      }
       if (pending) {
         setDraft(draftFromPick(pending));
         setFocusNote(sessionStorage.getItem("pofolio-note") === "yes");
@@ -115,6 +133,30 @@ function App() {
     setCreating(true);
     setModal(session?.user ? "entry" : "auth");
   }
+  function compose() {
+    if (isPublic) {
+      location.assign("/?add");
+      return;
+    }
+    setSaved("");
+    setDraft({ ...blank });
+    setSelected(undefined);
+    setFocusNote(false);
+    setModal("entry");
+  }
+  function authenticate(d: Draft) {
+    setDraft(d);
+    setCreating(false);
+    if (session?.user) {
+      setModal("profile");
+      return;
+    }
+    sessionStorage.setItem(
+      "pofolio-compose-handoff",
+      JSON.stringify({ draft: d, expires: Date.now() + 30 * 60000 }),
+    );
+    setModal("auth");
+  }
   function access() {
     if (isPublic) {
       location.assign("/?signin");
@@ -125,6 +167,13 @@ function App() {
   }
   useEffect(() => {
     const query = new URLSearchParams(location.search);
+    if (session && query.has("add")) {
+      history.replaceState(null, "", "/");
+      setDraft({ ...blank });
+      setSelected(undefined);
+      setFocusNote(false);
+      setModal("entry");
+    }
     if (session && query.has("signin")) {
       const reason = query.get("error");
       if (reason) {
@@ -158,6 +207,7 @@ function App() {
     }
   }
   function close() {
+    sessionStorage.removeItem("pofolio-compose-handoff");
     sessionStorage.removeItem("pofolio-pending");
     sessionStorage.removeItem("pofolio-note");
     setCallbackError("");
@@ -175,6 +225,7 @@ function App() {
         active={isPublic ? "" : discover ? "discover" : "diary"}
         session={session}
         open={access}
+        add={compose}
       />
       <main className="frame" id="content">
         {error && (
@@ -270,14 +321,17 @@ function App() {
         />
       )}
       {modal === "entry" && (
-        <EntryForm
+        <EntryComposer
+          signedIn={!!session?.profile}
+          authenticate={authenticate}
           focusNote={focusNote}
           initial={draft}
           entry={selected}
           close={close}
           done={async () => {
-            await done();
+            close();
             setSaved("Archive updated.");
+            await refresh().catch((e) => setError(message(e)));
           }}
         />
       )}

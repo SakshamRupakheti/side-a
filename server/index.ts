@@ -33,12 +33,13 @@ app.use("/api/*", async (c, next) => {
     });
   await next();
 });
-app.use(
-  "/api/*",
+app.use("/api/*", (c, next) =>
   bodyLimit({
-    maxSize: 65536,
+    maxSize: /^\/api\/me\/entries(?:\/[^/]+)?$/.test(c.req.path)
+      ? 512 * 1024
+      : 65536,
     onError: (c) => c.json({ error: "Request is too large." }, 413),
-  }),
+  })(c, next),
 );
 app.on(["POST", "GET"], "/api/auth/*", async (c) => {
   const path = c.req.path.slice("/api/auth".length);
@@ -128,7 +129,7 @@ app.post("/api/me/metadata", async (c) => {
   const { url } = z
     .object({ url: z.string().min(1).max(2048) })
     .parse(await c.req.json());
-  return c.json(await metadata(url));
+  return c.json(await metadata(url, c.env));
 });
 app.post("/api/me/entries", async (c) => {
   const e = entryInput.parse(await c.req.json());
