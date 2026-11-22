@@ -6,5 +6,6 @@ dist/
 !.dev.vars.example
 .env*
 !.env.example
+client_secret*.apps.googleusercontent.com.json
 *.log
 
