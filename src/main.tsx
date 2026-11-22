@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ArrowRight, ArrowUpRight, AudioLines, Headphones } from "lucide-react";
+import { AudioLines, Headphones } from "lucide-react";
 import { api, Brand, Header, message, type Session } from "./ui";
 import { AuthForm, EntryForm, ProfileForm } from "./Forms";
 import { Shelf, Discover } from "./Shelf";
@@ -13,66 +13,46 @@ import {
   type PublicPage,
 } from "../shared/diary";
 import "@fontsource/dm-sans/latin-400.css";
-import "@fontsource/dm-sans/latin-500.css";
 import "@fontsource/dm-sans/latin-700.css";
-import "@fontsource/instrument-serif/latin-400.css";
-import "@fontsource/instrument-serif/latin-400-italic.css";
+import "@fontsource-variable/anybody/standard.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
+import { Entrance } from "./Entrance";
+import { picks, draftFromPick } from "./picks";
+import { ListeningDeck } from "./ListeningDeck";
 import "./style.css";
 
-function Welcome({
-  start,
-  save,
-}: {
-  start: () => void;
-  save: (d: Draft) => void;
-}) {
-  return (
-    <>
-      <section className="hero">
-        <div className="hero-copy">
-          <p className="eyebrow">
-            <span className="dash" /> A PERSONAL LISTENING JOURNAL
-          </p>
-          <h1>
-            Keep a record
-            <br />
-            of <em>listening.</em>
-          </h1>
-          <p className="lede">
-            A diary for the podcasts and audiobooks you spend time with. Log a
-            listen, keep a note, and share what stays with you.
-          </p>
-          <div className="actions">
-            <button className="button primary" onClick={start}>
-              Start your diary <ArrowRight size={17} />
-            </button>
-            <a className="plainlink" href="/discover">
-              Discover podcasts <ArrowUpRight size={14} />
-            </a>
-          </div>
-        </div>
-        <figure className="tape-panel">
-          <div className="corner tl" />
-          <div className="corner tr" />
-          <div className="corner bl" />
-          <div className="corner br" />
-          <img
-            src="/tape.webp"
-            width="1080"
-            height="720"
-            fetchPriority="high"
-            alt="Worn cassette with a handwritten Side A label and red stripes"
-          />
-        </figure>
-      </section>
-      <Shelf save={save} />
-    </>
-  );
-}
 type Dialog = "auth" | "profile" | "entry" | null;
 function App() {
   const [session, setSession] = useState<Session | null>(null),
     [modal, setModal] = useState<Dialog>(null);
+  const [focusNote, setFocusNote] = useState(false);
+  const [saved, setSaved] = useState("");
+  const saving = React.useRef(false);
+  async function saveFeatured(d: Draft, note = false) {
+    if (
+      note ||
+      !session?.user ||
+      !session.profile ||
+      diary?.entries.some((e) => e.url === d.url)
+    ) {
+      add(d, note);
+      return;
+    }
+    if (saving.current) return;
+    saving.current = true;
+    setError("");
+    setSaved("");
+    try {
+      await api("/me/entries", "POST", d);
+      await refresh();
+      setSaved("Saved to your archive.");
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      saving.current = false;
+    }
+  }
+
   const [creating, setCreating] = useState(false);
   const [callbackError, setCallbackError] = useState("");
   const [selected, setSelected] = useState<Entry>(),
@@ -94,15 +74,42 @@ function App() {
     const s = await api<Session>("/session");
     setSession(s);
     if (s.user) {
-      if (!discover) setDiary(await api("/me/diary"));
-      if (!s.profile) setModal("profile");
+      const collection = !discover
+        ? await api<{ entries: Entry[]; stats: Stats }>("/me/diary")
+        : null;
+      if (collection) setDiary(collection);
+      const pending = picks.find(
+        (p) => p.art === sessionStorage.getItem("pofolio-pending"),
+      );
+      if (pending) {
+        setDraft(draftFromPick(pending));
+        setFocusNote(sessionStorage.getItem("pofolio-note") === "yes");
+        setSelected(collection?.entries.find((e) => e.url === pending.url));
+        setModal(s.profile ? "entry" : "profile");
+        sessionStorage.removeItem("pofolio-pending");
+        sessionStorage.removeItem("pofolio-note");
+      } else if (!s.profile) setModal("profile");
     } else setDiary(null);
     return s;
   }, [discover, isPublic, path]);
   useEffect(() => {
     void refresh().catch((e) => setError(message(e)));
   }, [refresh]);
-  function add(d: Draft = { ...blank }) {
+  function add(d: Draft = { ...blank }, note = false) {
+    setFocusNote(note);
+    setSaved("");
+    const existing = diary?.entries.find((e) => d.url && e.url === d.url);
+    if (existing) {
+      setSelected(existing);
+      setDraft(undefined);
+      setModal("entry");
+      return;
+    }
+    const pick = picks.find((p) => p.url === d.url);
+    if (!session?.user && pick) {
+      sessionStorage.setItem("pofolio-pending", pick.art);
+      sessionStorage.setItem("pofolio-note", note ? "yes" : "no");
+    }
     setSelected(undefined);
     setDraft(d);
     setCreating(true);
@@ -151,6 +158,8 @@ function App() {
     }
   }
   function close() {
+    sessionStorage.removeItem("pofolio-pending");
+    sessionStorage.removeItem("pofolio-note");
     setCallbackError("");
     setModal(null);
     setDraft(undefined);
@@ -161,6 +170,7 @@ function App() {
       <a href="#content" className="skip">
         Skip to content
       </a>
+      {path === "/" && <Entrance />}
       <Header
         active={isPublic ? "" : discover ? "discover" : "diary"}
         session={session}
@@ -177,6 +187,14 @@ function App() {
               Try again
             </button>
           </div>
+        )}
+        {path === "/" && (
+          <ListeningDeck save={saveFeatured} records={diary?.entries} />
+        )}
+        {saved && (
+          <p className="save-feedback" role="status">
+            {saved}
+          </p>
         )}
         {unknown ? (
           <section className="pageintro">
@@ -197,8 +215,9 @@ function App() {
               items={diary.entries}
               stats={diary.stats}
               profile={session.profile}
-              add={() => add()}
+              add={(kind) => add({ ...blank, kind })}
               edit={(e) => {
+                setFocusNote(false);
                 setSelected(e);
                 setDraft(undefined);
                 setModal("entry");
@@ -209,13 +228,9 @@ function App() {
             <p role="status">Opening diary…</p>
           )
         ) : (
-          <Welcome
-            start={() => {
-              setCreating(true);
-              setModal("auth");
-            }}
-            save={add}
-          />
+          <div id="archive">
+            <Shelf save={add} />
+          </div>
         )}
       </main>
       <footer>
@@ -226,7 +241,7 @@ function App() {
             <a href="/privacy/">Privacy &amp; deletion</a>
           </div>
           <span className="footer-note">
-            <Headphones size={15} /> Podcasts &amp; audiobooks
+            <Headphones size={15} /> Podcasts · Audiobooks · Documentaries
           </span>
         </div>
       </footer>
@@ -255,7 +270,16 @@ function App() {
         />
       )}
       {modal === "entry" && (
-        <EntryForm initial={draft} entry={selected} close={close} done={done} />
+        <EntryForm
+          focusNote={focusNote}
+          initial={draft}
+          entry={selected}
+          close={close}
+          done={async () => {
+            await done();
+            setSaved("Archive updated.");
+          }}
+        />
       )}
     </>
   );

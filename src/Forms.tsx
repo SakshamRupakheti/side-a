@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Link2, LockKeyhole } from "lucide-react";
 import { api, ErrorText, Modal, type Session, useAction } from "./ui";
 import {
@@ -268,11 +268,16 @@ export function ProfileForm({
   );
 }
 export function EntryForm({
+  focusNote = false,
   entry,
   initial,
   close,
   done,
-}: { entry?: Entry; initial?: Draft } & FormProps) {
+}: { entry?: Entry; initial?: Draft; focusNote?: boolean } & FormProps) {
+  const noteField = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (focusNote) noteField.current?.focus();
+  }, [focusNote]);
   const [v, set] = useState<Draft>(entry || initial || { ...blank }),
     [hint, setHint] = useState(""),
     [loading, setLoading] = useState(false),
@@ -401,6 +406,7 @@ export function EntryForm({
             >
               <option value="podcast">Podcast episode</option>
               <option value="audiobook">Audiobook</option>
+              <option value="documentary">Documentary</option>
             </select>
           </label>
           <label>
@@ -473,6 +479,7 @@ export function EntryForm({
             <LockKeyhole size={14} /> Private note
           </span>
           <textarea
+            ref={noteField}
             maxLength={8000}
             value={v.note}
             onChange={(e) => change("note", e.target.value)}

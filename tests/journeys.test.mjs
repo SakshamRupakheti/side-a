@@ -270,6 +270,37 @@ test(
         null,
       );
     }
+    const documentary = {
+      ...base,
+      url: "https://www.nfb.ca/film/universe/",
+      title: "Universe",
+      kind: "documentary",
+      show_name: "",
+      status: "finished",
+      shared: true,
+    };
+    const film = await request("/me/entries", "POST", documentary, a, 201);
+    const privateFilm = (
+      await request("/me/diary", "GET", undefined, a)
+    ).data.entries.find((e) => e.id === film.data.id);
+    assert.equal(privateFilm.kind, "documentary");
+    assert.equal(privateFilm.note, base.note);
+    const publishedFilm = (await request("/u/mira")).data.entries.find(
+      (e) => e.title === "Universe",
+    );
+    assert.equal(publishedFilm.kind, "documentary");
+    assert.ok(!Object.hasOwn(publishedFilm, "note"));
+    await request(
+      "/me/entries/" + film.data.id,
+      "PUT",
+      { ...documentary, revision: 1, shared: false },
+      a,
+    );
+    assert.ok(
+      !(await request("/u/mira")).data.entries.some(
+        (e) => e.title === "Universe",
+      ),
+    );
     const thresholds = [1, 5, 10, 50, 100];
     for (let count = 2; count <= 100; count++) {
       await request(

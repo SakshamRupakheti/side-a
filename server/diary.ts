@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { parseSource, safeArt } from "./providers";
 import {
   milestones,
+  formats,
   type Stats,
   type Profile,
   type Entry,
@@ -36,7 +37,7 @@ export const entryInput = z.object({
       "Use a Spotify or YouTube thumbnail URL.",
     )
     .transform(safeArt),
-  kind: z.enum(["podcast", "audiobook"]),
+  kind: z.enum(formats),
   status: z.enum(["want", "listening", "finished"]),
   rating: z.number().int().min(1).max(5).nullable(),
   replays: z.number().int().min(0).max(100000),

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { X, AudioLines, ArrowUpRight, BookOpen, Compass } from "lucide-react";
+import { X, ArrowUpRight, BookOpen, Compass } from "lucide-react";
 import type { Profile } from "../shared/diary";
 import type { SocialProvider } from "../shared/sign-in";
 
@@ -101,11 +101,8 @@ export function Modal({
 }
 export function Brand() {
   return (
-    <a className="brand" href="/" aria-label="Side A home">
-      <span className="brandmark">
-        <AudioLines strokeWidth={2.3} />
-      </span>
-      Side A<span className="brand-dot">.</span>
+    <a className="brand" href="/" aria-label="PoFolio home">
+      PoFolio
     </a>
   );
 }
@@ -123,14 +120,17 @@ export function Header({
       <div className="frame top">
         <Brand />
         <nav aria-label="Main">
-          <a className={active === "diary" ? "current" : ""} href="/">
-            <BookOpen /> Diary
+          <a
+            className={active === "diary" ? "current" : ""}
+            href={session?.user ? "/#archive" : "/?signin"}
+          >
+            <BookOpen /> My Archive
           </a>
           <a
             className={active === "discover" ? "current" : ""}
             href="/discover"
           >
-            <Compass /> Discover
+            <Compass /> Explore
           </a>
         </nav>
         <button className="button top-action" onClick={open}>

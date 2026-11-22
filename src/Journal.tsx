@@ -1,8 +1,9 @@
+import { SharePoster } from "./SharePoster";
+import { coverFor } from "./picks";
 import { useState } from "react";
 import {
   ArrowUpRight,
   Award,
-  BookOpen,
   Headphones,
   LockKeyhole,
   Plus,
@@ -13,6 +14,9 @@ import {
 } from "lucide-react";
 import {
   milestones,
+  formats,
+  rooms,
+  type Draft,
   statuses,
   type Entry,
   type Profile,
@@ -76,7 +80,7 @@ export function Journal({
   items: Entry[];
   stats: Stats;
   profile: Profile | null;
-  add: () => void;
+  add: (kind: Draft["kind"]) => void;
   edit: (e: Entry) => void;
   settings: () => void;
 }) {
@@ -84,17 +88,17 @@ export function Journal({
   const filtered = items.filter((e) => filter === "all" || e.status === filter);
   return (
     <>
-      <section className="pageintro">
+      <section className="pageintro" id="archive">
         <div className="section-heading">
           <div>
             <p className="eyebrow">
               <span className="dash" /> PERSONAL JOURNAL
             </p>
             <h1>
-              My listening <em>diary.</em>
+              My <em>archive.</em>
             </h1>
           </div>
-          <button className="button primary" onClick={add}>
+          <button className="button primary" onClick={() => add("podcast")}>
             <Plus size={17} />
             Log a listen
           </button>
@@ -123,77 +127,81 @@ export function Journal({
             </button>
           ))}
         </div>
-        {filtered.length === 0 ? (
-          <div className="empty">
-            <BookOpen />
-            <h3>
-              {items.length
-                ? "No entries with this status"
-                : "Your diary starts here"}
-            </h3>
-            <p>
-              {items.length
-                ? "Select another status or log a listen."
-                : "Add a podcast episode or audiobook to start your listening record."}
-            </p>
-            <button className="plainlink" onClick={add}>
-              <Plus size={16} /> Log a listen
-            </button>
-          </div>
-        ) : (
-          filtered.map((e) => (
-            <article className="entryrow" key={e.id}>
-              {e.artwork && <img alt="" src={e.artwork} loading="lazy" />}
-              <div className="entrybody">
-                <small>
-                  {statuses[e.status]} ·{" "}
-                  {e.kind === "podcast" ? "Podcast" : "Audiobook"}
-                </small>
-                <h3>{e.title}</h3>
-                <p>{[e.show_name, e.creator].filter(Boolean).join(" · ")}</p>
-                {e.note && (
-                  <p className="note">
-                    <LockKeyhole size={14} /> {e.note}
-                  </p>
-                )}
-                {e.takeaway && <p>{e.takeaway}</p>}
-                <div className="details">
-                  <time dateTime={e.updated_at}>
-                    Updated{" "}
-                    {new Date(e.updated_at).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </time>
-                  {e.shared ? (
-                    <span>
-                      <Globe2 /> Shared
-                    </span>
-                  ) : (
-                    <span>
-                      <LockKeyhole /> Private
-                    </span>
-                  )}
-                  {e.rating && <span>{e.rating}/5</span>}
-                  {e.replays > 0 && <span>{e.replays} replays</span>}
-                  {e.url && (
-                    <a href={e.url} target="_blank" rel="noreferrer">
-                      Open source <ArrowUpRight />
-                    </a>
-                  )}
-                </div>
-              </div>
-              <button
-                className="icon"
-                aria-label={"Edit " + e.title}
-                onClick={() => edit(e)}
-              >
-                <Pencil size={16} />
+        {formats.map((kind) => (
+          <section key={kind} className={"room room-" + kind}>
+            <div className="section-heading">
+              <h3>{rooms[kind]}</h3>
+              <button className="plainlink" onClick={() => add(kind)}>
+                <Plus size={16} />
+                Add {kind}
               </button>
-            </article>
-          ))
-        )}
+            </div>
+            {!filtered.some((e) => e.kind === kind) && (
+              <p className="empty-note">
+                {filter === "all"
+                  ? "Nothing saved here yet."
+                  : "No entries with this status."}
+              </p>
+            )}
+            {filtered
+              .filter((e) => e.kind === kind)
+              .map((e) => (
+                <article className="entryrow" key={e.id}>
+                  {coverFor(e) && (
+                    <img alt="" src={coverFor(e)} loading="lazy" />
+                  )}
+                  <div className="entrybody">
+                    <small>
+                      {statuses[e.status]} · {e.kind}
+                    </small>
+                    <h3>{e.title}</h3>
+                    <p>
+                      {[e.show_name, e.creator].filter(Boolean).join(" · ")}
+                    </p>
+                    {e.note && (
+                      <p className="note">
+                        <LockKeyhole size={14} /> {e.note}
+                      </p>
+                    )}
+                    {e.takeaway && <p>{e.takeaway}</p>}
+                    <div className="details">
+                      <time dateTime={e.updated_at}>
+                        Updated{" "}
+                        {new Date(e.updated_at).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </time>
+                      {e.shared ? (
+                        <span>
+                          <Globe2 /> Shared
+                        </span>
+                      ) : (
+                        <span>
+                          <LockKeyhole /> Private
+                        </span>
+                      )}
+                      {e.rating && <span>{e.rating}/5</span>}
+                      {e.replays > 0 && <span>{e.replays} replays</span>}
+                      {e.url && (
+                        <a href={e.url} target="_blank" rel="noreferrer">
+                          Open source <ArrowUpRight />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    className="icon"
+                    aria-label={"Edit " + e.title}
+                    onClick={() => edit(e)}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                </article>
+              ))}
+          </section>
+        ))}
       </section>
       <Badges all values={milestones.filter((n) => n <= stats.finished)} />
     </>
@@ -209,6 +217,7 @@ export function Published({ page }: { page: PublicPage }) {
         <h1>{page.name}</h1>
         <p>@{page.username}</p>
         {page.bio && <p>{page.bio}</p>}
+        <SharePoster page={page} />
         <Numbers stats={page.stats} />
       </section>
       {page.badges && <Badges values={page.badges} />}
@@ -217,11 +226,10 @@ export function Published({ page }: { page: PublicPage }) {
         {!page.entries.length && <p>No entries shared yet.</p>}
         {page.entries.map((e, i) => (
           <article className="entryrow" key={i}>
-            {e.artwork && <img src={e.artwork} alt="" loading="lazy" />}
+            {coverFor(e) && <img src={coverFor(e)} alt="" loading="lazy" />}
             <div>
               <small>
-                {statuses[e.status]} ·{" "}
-                {e.kind === "podcast" ? "Podcast" : "Audiobook"}
+                {statuses[e.status]} · {e.kind}
               </small>
               <h3>{e.title}</h3>
               <p>{[e.show_name, e.creator].filter(Boolean).join(" · ")}</p>

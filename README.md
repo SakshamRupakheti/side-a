@@ -1,6 +1,6 @@
-# Side A
+# PoFolio
 
-A personal listening diary for podcasts and audiobooks. Save an episode link, record what stayed with you, and share selected entries at `/u/username`. Editors' picks link to real publisher pages. Every diary starts empty.
+A personal listening diary for podcasts, audiobooks and documentaries. Save an episode link, record what stayed with you, and share selected entries at `/u/username`. Editors' picks link to real publisher pages. Every diary starts empty.
 
 ## Run locally
 
@@ -13,7 +13,7 @@ npm run db:local
 npm run dev
 ```
 
-Open **http://127.0.0.1:8787**. Choose **Start your diary** to create a local account and select a username. The setup script generates a fresh secret in ignored `.dev.vars`. Local data persists under `.wrangler/state`. Rebuild with `npm run build` after changing client files. Wrangler watches Worker code.
+Open **http://127.0.0.1:8787**. Choose **Sign in** and **Create a new diary** to create a local account and select a username. The setup script generates a fresh secret in ignored `.dev.vars`. Local data persists under `.wrangler/state`. Rebuild with `npm run build` after changing client files. Wrangler watches Worker code.
 
 ## Use the diary
 
@@ -46,5 +46,5 @@ The first command type-checks, lints, builds the client and exercises a temporar
 
 ## License
 
-Application source and original visuals are available under the [MIT license](LICENSE). Third-party packages retain their own licenses. Instrument Serif and DM Sans use the SIL Open Font License. Podcast names and editorial links identify their respective publishers.
+Application source and original visuals are available under the [MIT license](LICENSE). Third-party packages retain their own licenses. Anybody, DM Sans and IBM Plex Mono use the SIL Open Font License. Podcast names and editorial links identify their respective publishers.
 

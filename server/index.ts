@@ -177,7 +177,7 @@ app.get("/api/me/export", async (c) => {
     )
     .bind(owner)
     .all();
-  c.header("Content-Disposition", 'attachment; filename="side-a-diary.json"');
+  c.header("Content-Disposition", 'attachment; filename="pofolio-diary.json"');
   return c.json({
     version: 1,
     exported_at: new Date().toISOString(),

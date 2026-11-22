@@ -1,6 +1,12 @@
+export const formats = ["podcast", "audiobook", "documentary"] as const;
+export const rooms = {
+  podcast: "Podcast diary",
+  audiobook: "Audiobooks",
+  documentary: "Documentaries",
+} as const;
 export const statuses = {
-  want: "Want to Listen",
-  listening: "Listening",
+  want: "Saved for later",
+  listening: "In progress",
   finished: "Finished",
 } as const;
 export type Status = keyof typeof statuses;
@@ -10,7 +16,7 @@ export interface Draft {
   creator: string;
   show_name: string;
   artwork: string;
-  kind: "podcast" | "audiobook";
+  kind: (typeof formats)[number];
   status: Status;
   note: string;
   takeaway: string;
