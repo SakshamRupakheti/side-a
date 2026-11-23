@@ -1,5 +1,19 @@
 # Release verification
 
+## Backend release, 23 November 2026
+
+| Check | Observed locally |
+|---|---|
+| npm run check | TypeScript, ESLint, Vite build and all 16 Node tests passed. The Worker suites use the production app handler, real Better Auth and isolated D1 databases. |
+| npm run worker:check | Wrangler completed its deployment dry run. Worker gzip size was 363.07 KiB with 33 static assets and one D1 binding. |
+| OAuth | A test-only Google token endpoint and signing key exercised the HTTPS callback, creation, private profile, secure cookies, sign-out, returning sign-in, retained entry and deletion. Live consent on the actual workers.dev hostname remains a launch gate. |
+| Visibility and ownership | Two listeners, owner export, explicit sharing, moment revocation, entry revocation, unpublishing, stale updates, concurrent manual retries and account deletion passed. Local fixture had 103 owner entries and 100 published entries across four pages. |
+| Query cost | EXPLAIN selected entry_history and public_history. Isolated D1 index probes for each read 26 rows (25 plus lookahead) and wrote zero. These are index probes, not entire HTTP request costs. Public endpoints also read consent, totals, sources and shared moments. |
+| Migration and recovery | The historical fixture preserved existing rows, identities and private moments. A failed child update rolled back the revision. A fresh Wrangler export restored unmodified into another local D1 with one synthetic user, one entry, one private moment, correct public/private totals, five migration records and zero foreign-key errors. An earlier rehearsal exposed trigger/view export ordering, which was corrected before applying to the development database. |
+| Existing local DB | Both new migrations applied. A read-only check found five applied migrations, zero foreign-key violations and zero difference between legacy-document and normalized moment counts. |
+| Browser | Opened the running Liner Notes composer, entered a temporary title and moment, confirmed default-private consent, closed and chose Keep editing, verified the moment text, then discarded the temporary draft. |
+| Production | Hosted CPU and actual Free account entitlement, provider consent and production smoke checks remain pending owner approval. No production database changes were run. |
+
 The local tests run the production Hono handler, Better Auth and the checked-in migration against an isolated Wrangler D1 database. Run `npm run check` to reproduce them. The harness creates its own accounts and credentials.
 
 | Journey | Assertion |

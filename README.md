@@ -20,7 +20,7 @@ Open **http://127.0.0.1:8787**. Choose **Sign in** and **Create a new diary** to
 Open the [local swipe lab](http://127.0.0.1:8787/swipe-lab) to try the homepage carousel with adjustable sensitivity, momentum and damping. Each release reports launch speed, distance from the release point and elapsed time. Lab adjustments apply to the current lab visit.
 
 1. Choose **Add a listen** and save a title, or paste a source link and select **Import details**. Review the cover, creator, category, original description and duration. You can supply any missing details.
-2. Use **Reflection** to describe the listen in your own words and record what stayed with you. **Moments** accepts optional timestamps in HH:MM:SS. Open the saved title in your archive to revisit it. Descriptions, reflections, moments and notes are private. A public takeaway appears when you share the entry and publish your profile.
+2. Use **Reflection** to describe the listen in your own words and record what stayed with you. **Moments** accepts optional timestamps in HH:MM:SS. Open the saved title in your archive to revisit it. Personal descriptions, reflections and notes are private. Each moment has a separate sharing control and requires a shared entry and a published profile to appear publicly. A public takeaway appears when you share the entry and publish your profile.
 3. Mark a podcast episode finished to count it toward milestones. Record additional full listens in the replay field. The same provider item can occur once per listener.
 4. Use **Profile settings** to publish the profile, select individual statistics and badges, export JSON, or delete the account. Sign in again if deletion requires a fresh session.
 
@@ -44,7 +44,7 @@ npm run check
 npm run worker:check
 ```
 
-The first command type-checks, lints, builds the client and exercises a temporary D1 database. The second produces a local Worker bundle and reports its compressed size. See the [verification record](docs/verification.md), [architecture and schema](docs/architecture.md), [service limits and official references](docs/services.md), and [Cloudflare deployment runbook](docs/deployment.md).
+The first command type-checks, lints, builds the client and exercises a temporary D1 database. The second produces a local Worker bundle and reports its compressed size. See the [verification record](docs/verification.md), [architecture and schema](docs/architecture.md), [service limits and official references](docs/services.md), and [Cloudflare deployment runbook](docs/deployment.md). The [launch checklist](docs/launch-checklist.md) includes the approval gates, [encrypted backup procedure](docs/zero-dollar-operations.md) and [cost guardrails](docs/cost-guardrails.md).
 
 ## License
 
