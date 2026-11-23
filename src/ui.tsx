@@ -180,8 +180,10 @@ export function Header({
             <Compass /> Explore
           </a>
           <button className="nav-add" onClick={add} aria-label="Add a listen">
-            <Plus size={17} />
-            <span>Add a listen</span>
+            <span className="nav-add-surface">
+              <Plus size={15} aria-hidden="true" />
+              Add
+            </span>
           </button>
         </nav>
         <button className="button top-action" onClick={open}>

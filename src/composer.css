@@ -2,22 +2,45 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  align-self: center;
-  gap: 6px;
-  padding: 8px 14px;
+  padding: 0;
+  min-width: 44px;
   min-height: 44px;
-  border: 1px solid #a44645;
-  background: #351c21;
-  color: #ffe6dc;
-  border-radius: 22px;
+  border-radius: 9px;
+  color: var(--ink);
   font-size: 14px;
-  font-weight: 700;
 }
-.nav-add:hover {
-  background: #56262b;
+.nav-add-surface {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding-inline: 10px;
+  border-radius: inherit;
+  background: #17171b;
 }
 .nav-add svg {
   display: block;
+  flex: none;
+  border-radius: 3px;
+  background: var(--gold);
+  color: #000;
+}
+@media (hover: hover) {
+  .nav-add:hover .nav-add-surface {
+    background: #222227;
+  }
+}
+.nav-add:active .nav-add-surface {
+  background: #1c1c20;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nav-add svg {
+    transition: transform 100ms ease-out;
+  }
+  .nav-add:active svg {
+    transform: scale(0.94);
+  }
 }
 dialog.composer {
   background:
@@ -274,18 +297,20 @@ dialog.composer::backdrop {
   .top nav {
     gap: 8px;
   }
-  .nav-add {
-    width: 44px;
-    padding: 0;
-  }
-  .nav-add span {
-    display: none;
-  }
   .top .brand {
     flex-shrink: 0;
   }
   .top .top-action {
     flex-shrink: 0;
+  }
+}
+@media (max-width: 560px) {
+  .nav-add {
+    font-size: 12px;
+  }
+  .nav-add-surface {
+    gap: 4px;
+    padding-inline: 6px;
   }
 }
 @media (max-width: 420px) {

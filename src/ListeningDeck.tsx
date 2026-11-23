@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -17,9 +18,10 @@ import {
 import { draftFromPick, picks } from "./picks";
 import type { Draft } from "../shared/diary";
 import { Modal } from "./ui";
+import { deckFrame, releaseTarget, sleeveEase } from "./deck-motion";
 export type PickAction = (draft: Draft, note?: boolean) => void;
 const count = picks.length;
-const wrap = (index: number) => ((index % count) + count) % count;
+
 export function ListeningDeck({
   save,
   records,
@@ -27,23 +29,58 @@ export function ListeningDeck({
   save: PickAction;
   records?: { url: string }[];
 }) {
-  const [active, setActive] = useState(0),
-    [offset, setOffset] = useState(0),
+  const [position, setPosition] = useState(0),
+    [dragging, setDragging] = useState(false),
     [film, setFilm] = useState(false),
     [feedback, setFeedback] = useState("");
-  const stage = useRef<HTMLDivElement>(null),
-    gesture = useRef<{
-      x: number;
-      y: number;
-      time: number;
-      width: number;
-    } | null>(null);
-  const frame = useRef(0),
-    dragged = useRef(false);
+  const stage = useRef<HTMLDivElement>(null);
+  const current = useRef(0),
+    target = useRef(0),
+    frame = useRef(0);
+  const gesture = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    origin: number;
+    stride: number;
+    lastX: number;
+    lastTime: number;
+    velocity: number;
+  } | null>(null);
+  const dragged = useRef(false);
+  const { active, cards } = deckFrame(position, count);
   const chosen = picks[active];
-  function select(index: number) {
-    setActive(wrap(index));
-    setFeedback("");
+  const update = useCallback((next: number) => {
+    current.current = next;
+    setPosition(next);
+  }, []);
+  const settle = useCallback(
+    (destination: number) => {
+      cancelAnimationFrame(frame.current);
+      target.current = destination;
+      setFeedback("");
+      const from = current.current;
+      if (
+        from === destination ||
+        matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        update(destination);
+        return;
+      }
+      const start = performance.now();
+      function tick(now: number) {
+        const t = Math.min(1, (now - start) / 530);
+        // Sample the original sleeve easing once for the entire fan.
+        const eased = sleeveEase(t);
+        update(t === 1 ? destination : from + (destination - from) * eased);
+        if (t < 1) frame.current = requestAnimationFrame(tick);
+      }
+      frame.current = requestAnimationFrame(tick);
+    },
+    [update],
+  );
+  function move(direction: number) {
+    settle(target.current + direction);
   }
   useEffect(() => {
     const el = stage.current;
@@ -52,7 +89,7 @@ export function ListeningDeck({
       total = 0,
       previous = 0;
     function wheel(e: WheelEvent) {
-      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) || gesture.current) return;
       e.preventDefault();
       const now = performance.now();
       if (now - previous > 170) total = 0;
@@ -60,9 +97,7 @@ export function ListeningDeck({
       if (now - last < 320) return;
       total += e.deltaX;
       if (Math.abs(total) > 32) {
-        const direction = Math.sign(total);
-        setActive((i) => wrap(i + direction));
-        setFeedback("");
+        settle(target.current + Math.sign(total));
         last = now;
         total = 0;
       }
@@ -72,50 +107,65 @@ export function ListeningDeck({
       el.removeEventListener("wheel", wheel);
       cancelAnimationFrame(frame.current);
     };
-  }, []);
+  }, [settle]);
   function down(e: PointerEvent<HTMLDivElement>) {
     if (!e.isPrimary || e.button !== 0) return;
+    cancelAnimationFrame(frame.current);
     dragged.current = false;
     gesture.current = {
+      id: e.pointerId,
       x: e.clientX,
       y: e.clientY,
-      time: performance.now(),
-      width: e.currentTarget.clientWidth,
+      origin: current.current,
+      stride: Math.min(250, e.currentTarget.clientWidth * 0.48),
+      lastX: e.clientX,
+      lastTime: e.timeStamp,
+      velocity: 0,
     };
   }
   function drag(e: PointerEvent<HTMLDivElement>) {
-    const start = gesture.current;
-    if (!start || !e.isPrimary) return;
-    const dx = e.clientX - start.x,
-      dy = e.clientY - start.y;
-    if (!dragged.current && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 9) {
-      gesture.current = null;
-      return;
+    const g = gesture.current;
+    if (!g || e.pointerId !== g.id) return;
+    const dx = e.clientX - g.x,
+      dy = e.clientY - g.y;
+    if (!dragged.current) {
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 9) {
+        gesture.current = null;
+        settle(Math.round(current.current));
+        return;
+      }
+      if (Math.abs(dx) < 6) return;
+      dragged.current = true;
+      setDragging(true);
+      setFeedback("");
+      e.currentTarget.setPointerCapture(e.pointerId);
     }
-    if (Math.abs(dx) < 6 && !dragged.current) return;
-    dragged.current = true;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const fraction = Math.max(
-      -1,
-      Math.min(1, dx / Math.min(250, start.width * 0.48)),
-    );
-    cancelAnimationFrame(frame.current);
-    frame.current = requestAnimationFrame(() => setOffset(fraction));
+    const elapsed = e.timeStamp - g.lastTime;
+    if (elapsed > 0 && e.clientX !== g.lastX) {
+      const sample = (g.lastX - e.clientX) / (g.stride * elapsed);
+      g.velocity =
+        Math.sign(sample) === Math.sign(g.velocity) && elapsed < 90
+          ? 0.65 * sample + 0.35 * g.velocity
+          : sample;
+      g.lastTime = e.timeStamp;
+      g.lastX = e.clientX;
+    }
+    update(g.origin - dx / g.stride);
   }
   function release(e: PointerEvent<HTMLDivElement>) {
-    if (!e.isPrimary) return;
-    cancelAnimationFrame(frame.current);
-    const start = gesture.current;
+    const g = gesture.current;
+    if (!g || e.pointerId !== g.id) return;
     gesture.current = null;
-    setOffset(0);
-    if (!start || !dragged.current || e.type === "pointercancel") return;
-    const dx = e.clientX - start.x;
-    const velocity = Math.abs(dx) / Math.max(1, performance.now() - start.time);
-    if (
-      Math.abs(dx) > Math.min(62, start.width * 0.15) ||
-      (Math.abs(dx) > 17 && velocity > 0.32)
-    )
-      select(active - Math.sign(dx));
+    setDragging(false);
+    if (!dragged.current || e.type !== "pointerup") {
+      settle(Math.round(current.current));
+      return;
+    }
+    const lastPosition = g.origin - (e.clientX - g.x) / g.stride;
+    const velocity =
+      g.velocity * Math.max(0, 1 - (e.timeStamp - g.lastTime) / 100);
+    update(lastPosition);
+    settle(releaseTarget(lastPosition, velocity, count));
   }
   async function share() {
     try {
@@ -153,35 +203,38 @@ export function ListeningDeck({
       </div>
       <div
         ref={stage}
-        className={"deck-stage" + (offset ? " dragging" : "")}
+        className={"deck-stage" + (dragging ? " dragging" : "")}
         role="group"
         tabIndex={0}
         aria-label="Featured covers. Swipe or use the arrow keys."
         onKeyDown={(e) => {
           if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
             e.preventDefault();
-            select(active + (e.key === "ArrowRight" ? 1 : -1));
+            move(e.key === "ArrowRight" ? 1 : -1);
           }
         }}
         onPointerDown={down}
         onPointerMove={drag}
         onPointerUp={release}
         onPointerCancel={release}
+        onLostPointerCapture={release}
         onPointerLeave={() => {
-          if (!dragged.current) gesture.current = null;
+          if (gesture.current && !dragged.current) {
+            gesture.current = null;
+            settle(Math.round(current.current));
+          }
         }}
       >
         <div className="lamp" />
         <div key={active} className="pulse" />
         {picks.map((p, i) => {
-          let slot = wrap(i - active);
-          if (slot > count / 2) slot -= count;
-          const pos = slot + offset,
-            dist = Math.abs(pos);
+          const { offset, depth: dist, stride, clearance, layer } = cards[i];
           const style = {
-            "--pos": pos,
+            "--pos": offset,
             "--depth": dist,
-            zIndex: 10 - Math.round(dist * 2),
+            "--path-stride": stride,
+            "--path-clearance": clearance,
+            zIndex: layer,
             opacity: Math.min(1, Math.max(0, 3 - dist)),
             visibility: dist >= 3 ? "hidden" : "visible",
           } as CSSProperties;
@@ -192,9 +245,11 @@ export function ListeningDeck({
               key={p.art}
               tabIndex={-1}
               aria-label={"Select " + p.title}
-              aria-hidden={Math.abs(slot) > 2}
-              onClick={() => {
-                if (!dragged.current) select(i);
+              aria-pressed={i === active}
+              aria-hidden={dist >= 3}
+              onClick={(event) => {
+                if (!dragged.current || event.detail === 0)
+                  settle(Math.round(position + offset));
               }}
             >
               <img src={"/art/" + p.art + ".webp"} draggable={false} alt="" />
@@ -246,17 +301,14 @@ export function ListeningDeck({
           <Clapperboard size={15} /> Watch the short
         </button>
         <div className="deck-pager">
-          <button
-            aria-label="Previous listen"
-            onClick={() => select(active - 1)}
-          >
+          <button aria-label="Previous listen" onClick={() => move(-1)}>
             <ArrowLeft />
           </button>
           <span>
             {String(active + 1).padStart(2, "0")} /{" "}
             {String(count).padStart(2, "0")}
           </span>
-          <button aria-label="Next listen" onClick={() => select(active + 1)}>
+          <button aria-label="Next listen" onClick={() => move(1)}>
             <ArrowRight />
           </button>
         </div>

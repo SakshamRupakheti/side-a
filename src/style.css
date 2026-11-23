@@ -291,6 +291,15 @@ nav a svg {
 }
 .sleeve {
   --s: clamp(204px, 23cqw, 345px);
+  --stride: 0.67;
+  --clearance: 0.49;
+  --travel: calc(
+    var(--s) *
+      (
+        var(--stride) * var(--path-stride) + var(--clearance) *
+          var(--path-clearance)
+      )
+  );
   position: absolute;
   left: 50%;
   top: 50%;
@@ -302,12 +311,9 @@ nav a svg {
   overflow: hidden;
   box-shadow: 0 14px 20px #0009;
   transform: translate(-50%, -50%)
-    translate3d(calc(var(--pos) * var(--s) * 0.67), calc(var(--depth) * 5px), 0)
+    translate3d(var(--travel), calc(var(--depth) * 5px), 0)
     rotateY(calc(var(--pos) * -15deg)) rotateZ(calc(var(--pos) * 4deg))
     scale(calc(1 - var(--depth) * 0.13));
-  transition:
-    transform 0.53s cubic-bezier(0.2, 0.88, 0.22, 1.07),
-    opacity 0.35s;
   touch-action: pan-y;
   cursor: inherit;
   line-height: 0;
@@ -340,9 +346,6 @@ nav a svg {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.dragging .sleeve {
-  transition: none;
 }
 .pulse {
   position: absolute;
@@ -1085,12 +1088,10 @@ footer {
   }
   .sleeve {
     --s: clamp(160px, 48cqw, 216px);
+    --stride: 0.48;
+    --clearance: 0.478;
     transform: translate(-50%, -50%)
-      translate3d(
-        calc(var(--pos) * var(--s) * 0.48),
-        calc(var(--depth) * 4px),
-        0
-      )
+      translate3d(var(--travel), calc(var(--depth) * 4px), 0)
       rotateY(calc(var(--pos) * -18deg)) rotateZ(calc(var(--pos) * 3deg))
       scale(calc(1 - var(--depth) * 0.15));
   }
