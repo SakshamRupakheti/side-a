@@ -102,3 +102,24 @@ export interface PublicPage {
   badges: number[] | null;
   entries: PublicEntry[];
 }
+
+export type DeckEntry = Pick<
+  Entry,
+  | "id"
+  | "title"
+  | "creator"
+  | "show_name"
+  | "kind"
+  | "artwork"
+  | "url"
+  | "status"
+> & { created_at: string };
+export interface DeckPage {
+  revision: number;
+  entries: DeckEntry[];
+  total: number;
+  start: number;
+  next_cursor: string | null;
+  newer_cursor: string | null;
+}
+export type DeckChange = { kind: "created" | "edited" | "deleted"; id: string };

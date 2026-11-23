@@ -1,5 +1,12 @@
-import { useState, type CSSProperties } from "react";
 import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type CSSProperties,
+} from "react";
+import {
+  BookOpen,
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
@@ -8,41 +15,150 @@ import {
   Share2,
   Clapperboard,
 } from "lucide-react";
-import { draftFromPick, picks } from "./picks";
-import type { Draft } from "../shared/diary";
+import { coverFor, draftFromPick, picks } from "./picks";
+import { statuses, type DeckEntry, type Draft } from "../shared/diary";
 import { Modal } from "./ui";
 import { deckFrame } from "./deck-motion";
 import { defaults } from "./swipe-physics";
 import { useKineticSwipe } from "./useKineticSwipe";
 import { SwipeLab } from "./SwipeLab";
 export type PickAction = (draft: Draft, note?: boolean) => void;
-const count = picks.length;
+import type { PersonalStage } from "./PersonalCollection";
+
+interface Cover {
+  id: string;
+  title: string;
+  kind: string;
+  label: string;
+  byline: string;
+  artwork: string;
+  url: string;
+  entry?: DeckEntry;
+  editorial?: (typeof picks)[number];
+}
+const discoveryCovers: Cover[] = picks.map((p) => ({
+  id: p.art,
+  title: p.title,
+  kind: p.kind,
+  label: p.category,
+  byline: p.show,
+  artwork: "/art/" + p.art + ".webp",
+  url: p.url,
+  editorial: p,
+}));
+function savedCover(e: DeckEntry): Cover {
+  return {
+    id: e.id,
+    title: e.title,
+    kind: e.kind,
+    label: statuses[e.status],
+    byline: e.creator || e.show_name,
+    artwork: coverFor(e),
+    url: e.url,
+    entry: e,
+  };
+}
+function SleeveArt({
+  src,
+  title,
+  kind,
+  small = false,
+}: {
+  src: string;
+  title: string;
+  kind: string;
+  small?: boolean;
+}) {
+  const [failed, setFailed] = useState("");
+  return src && failed !== src ? (
+    <img src={src} alt="" draggable={false} onError={() => setFailed(src)} />
+  ) : (
+    <span className={small ? "mini-sleeve" : "type-sleeve"} aria-hidden="true">
+      <small>{kind}</small>
+      <b>{title}</b>
+    </span>
+  );
+}
 
 export function ListeningDeck({
   save,
   records,
+  personal,
   lab = false,
 }: {
-  save: PickAction;
+  save?: PickAction;
+  personal?: PersonalStage;
   lab?: boolean;
   records?: { url: string }[];
 }) {
   const [film, setFilm] = useState(false),
     [feedback, setFeedback] = useState("");
   const [settings, change] = useState(defaults);
-  const { stage, motion, reading, select, move, suppressClick, handlers } =
-    useKineticSwipe(settings);
+  const page = personal?.page;
+  const count = page?.total ?? discoveryCovers.length;
+  const bounds = page
+    ? {
+        first: page.start,
+        last: Math.max(page.start, page.start + page.entries.length - 1),
+      }
+    : undefined;
+  const {
+    stage,
+    motion,
+    reading,
+    select,
+    move,
+    place,
+    suppressClick,
+    handlers,
+  } = useKineticSwipe(settings, bounds, personal?.focus.slot);
   const { position, phase } = motion;
-  const { active, cards } = deckFrame(position, count);
-  const chosen = picks[active];
-  const [feedbackFor, setFeedbackFor] = useState(chosen.url);
+  const { active, cards } = deckFrame(position, count, bounds);
+  function coverAt(index: number): Cover | undefined {
+    if (!page) return discoveryCovers[index];
+    const item = page.entries[index - page.start];
+    return item && savedCover(item);
+  }
+  const chosen = coverAt(active);
+  const entry = chosen?.entry;
+  const url = chosen?.url ?? "";
+  const focus = personal?.focus;
+  const currentPosition = useRef(position);
+  useLayoutEffect(() => {
+    currentPosition.current = position;
+  }, [position]);
+  useLayoutEffect(() => {
+    if (!focus) return;
+    if (
+      !focus.animate ||
+      matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      place(focus.slot);
+    else {
+      if (Math.abs(currentPosition.current - focus.slot) > 4)
+        place(focus.slot - 1);
+      select(focus.slot);
+    }
+  }, [focus, place, select]);
+  const [arriving, setArriving] = useState<string>();
+  useEffect(() => {
+    setArriving(focus?.arriving);
+    if (!focus?.arriving) return;
+    const timer = setTimeout(() => setArriving(undefined), 600);
+    return () => clearTimeout(timer);
+  }, [focus]);
+  const onPosition = personal?.onPosition;
+  useEffect(() => {
+    if (active >= 0) onPosition?.(active);
+  }, [active, onPosition]);
+  const [feedbackFor, setFeedbackFor] = useState("");
   async function share() {
-    setFeedbackFor(chosen.url);
+    setFeedback("");
+    setFeedbackFor(url);
     try {
-      if (navigator.share)
-        await navigator.share({ title: chosen.title, url: chosen.url });
+      if (navigator.share) await navigator.share({ title: chosen?.title, url });
       else {
-        await navigator.clipboard.writeText(chosen.url);
+        await navigator.clipboard.writeText(url);
         setFeedback("Source link copied.");
       }
     } catch (e) {
@@ -53,14 +169,17 @@ export function ListeningDeck({
   return (
     <section
       className={"deck tone-" + (active % 3)}
-      aria-label={lab ? "Swipe lab" : "Editor's rotation"}
+      aria-label={
+        lab ? "Swipe lab" : personal ? "Your collection" : "Discovery preview"
+      }
       aria-roledescription="carousel"
     >
       <div className="stage-heading">
         <div>
           {!lab && (
             <p className="eyebrow">
-              <span className="live-dot" /> EDITOR’S ROTATION
+              <span className="live-dot" />{" "}
+              {personal ? "YOUR COLLECTION" : "DISCOVERY PREVIEW"}
             </p>
           )}
           <h1>
@@ -93,9 +212,16 @@ export function ListeningDeck({
         data-motion={phase}
         role="group"
         tabIndex={0}
-        aria-label="Featured covers. Swipe or use the arrow keys."
+        aria-label={
+          (personal ? "Your saved covers." : "Featured covers.") +
+          " Swipe or use the arrow keys."
+        }
         onKeyDown={(e) => {
-          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          if (e.target === e.currentTarget && e.key === "Enter" && entry) {
+            e.preventDefault();
+            if (!e.repeat) personal?.open(entry.id, false);
+          }
+          if (count > 1 && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
             e.preventDefault();
             move(e.key === "ArrowRight" ? 1 : -1);
           }
@@ -104,88 +230,153 @@ export function ListeningDeck({
       >
         <div className="lamp" />
         <div key={active} className="pulse" />
-        {picks.map((p, i) => {
-          const { offset, depth: dist, stride, clearance, layer } = cards[i];
-          const style = {
-            "--pos": offset,
-            "--depth": dist,
-            "--path-stride": stride,
-            "--path-clearance": clearance,
-            zIndex: layer,
-            opacity: Math.min(1, Math.max(0, 3 - dist)),
-            visibility: dist >= 3 ? "hidden" : "visible",
-          } as CSSProperties;
-          return (
-            <button
-              className="sleeve"
-              style={style}
-              key={p.art}
-              tabIndex={-1}
-              aria-label={"Select " + p.title}
-              aria-pressed={i === active}
-              aria-hidden={dist >= 3}
-              onClick={(event) => {
-                if (!suppressClick.current || event.detail === 0)
-                  select(Math.round(position + offset));
-              }}
-            >
-              <img src={"/art/" + p.art + ".webp"} draggable={false} alt="" />
-              <span className="sleeve-label">{p.show}</span>
+        {personal && !count && (
+          <div className="empty-sleeve">
+            <span>Your collection starts with one.</span>
+            <button className="button" onClick={personal.add}>
+              Add your first listen
             </button>
-          );
-        })}
+          </div>
+        )}
+        {cards.map(
+          ({ index: i, offset, depth: dist, stride, clearance, layer }) => {
+            const cover = coverAt(i);
+            if (!cover) return null;
+            const item = cover.entry;
+            const style = {
+              "--pos": offset,
+              "--depth": dist,
+              "--path-stride": stride,
+              "--path-clearance": clearance,
+              zIndex: layer,
+              opacity: Math.min(1, Math.max(0, 3 - dist)),
+              visibility: dist >= 3 ? "hidden" : "visible",
+            } as CSSProperties;
+            return (
+              <button
+                className={
+                  "sleeve" + (arriving === cover.id ? " sleeve-arriving" : "")
+                }
+                style={style}
+                key={cover.id}
+                tabIndex={-1}
+                aria-label={
+                  (item && i === active ? "Open record " : "Select ") +
+                  cover.title
+                }
+                aria-pressed={i === active}
+                aria-hidden={dist >= 3}
+                onClick={(event) => {
+                  if (suppressClick.current && event.detail !== 0) return;
+                  if (item && i === active) personal?.open(item.id, false);
+                  else select(item ? i : Math.round(position + offset));
+                }}
+              >
+                <SleeveArt
+                  src={cover.artwork}
+                  title={cover.title}
+                  kind={cover.kind}
+                />
+                <span className="sleeve-label">
+                  {cover.byline || cover.kind}
+                </span>
+              </button>
+            );
+          },
+        )}
       </div>
-      <div className="rail">
-        <img
-          src={"/art/" + chosen.art + ".webp"}
-          width="42"
-          height="42"
-          alt=""
-        />
-        <div className="now" aria-live="polite">
-          <small>
-            {chosen.kind} · {chosen.category}
-          </small>
-          <b>{chosen.title}</b>
-          <span>{chosen.show}</span>
+      {chosen && (
+        <div className="rail">
+          <SleeveArt
+            small
+            src={chosen.artwork}
+            title={chosen.title}
+            kind={chosen.kind}
+          />
+          <div className="now" aria-live="polite">
+            <small>
+              {chosen.kind} · {chosen.label}
+            </small>
+            <b>{chosen.title}</b>
+            <span>{chosen.byline}</span>
+          </div>
+          <div className="rail-actions">
+            {entry ? (
+              <button onClick={() => personal?.open(entry.id, false)}>
+                <BookOpen />
+                Open record
+              </button>
+            ) : (
+              <button
+                onClick={() =>
+                  chosen.editorial && save?.(draftFromPick(chosen.editorial))
+                }
+              >
+                <BookmarkPlus />
+                {records?.some((e) => e.url === url) ? "Edit entry" : "Save"}
+              </button>
+            )}
+            {url && (
+              <a href={url} target="_blank" rel="noreferrer">
+                <ArrowUpRight />
+                Open source
+              </a>
+            )}
+            <button
+              onClick={() =>
+                entry
+                  ? personal?.open(entry.id, true)
+                  : chosen.editorial &&
+                    save?.(draftFromPick(chosen.editorial), true)
+              }
+            >
+              <NotebookPen />
+              {entry ? "Edit" : "Add note"}
+            </button>
+            {url && (
+              <button
+                onClick={() => void share()}
+                aria-label={entry ? "Share original source" : "Share"}
+              >
+                <Share2 />
+                Share
+              </button>
+            )}
+          </div>
         </div>
-        <div className="rail-actions">
-          <button onClick={() => save(draftFromPick(chosen))}>
-            <BookmarkPlus />
-            {records?.some((e) => e.url === chosen.url) ? "Edit entry" : "Save"}
-          </button>
-          <a href={chosen.url} target="_blank" rel="noreferrer">
-            <ArrowUpRight />
-            Open source
-          </a>
-          <button onClick={() => save(draftFromPick(chosen), true)}>
-            <NotebookPen />
-            Add note
-          </button>
-          <button onClick={() => void share()}>
-            <Share2 />
-            Share
-          </button>
-        </div>
-      </div>
-      {feedback && feedbackFor === chosen.url && (
+      )}
+      {feedback && feedbackFor === url && (
         <p className="share-feedback" role="status">
           {feedback}
         </p>
       )}
       <div className="deck-foot">
-        <button onClick={() => setFilm(true)} className="film-button">
-          <Clapperboard size={15} /> Watch the short
-        </button>
+        {personal ? (
+          <span className="story-count">
+            {count} {count === 1 ? "story" : "stories"} collected
+          </span>
+        ) : (
+          <button onClick={() => setFilm(true)} className="film-button">
+            <Clapperboard size={15} /> Watch the short
+          </button>
+        )}
         <div className="deck-pager">
-          <button aria-label="Previous listen" onClick={() => move(-1)}>
+          <button
+            disabled={!!personal && active <= 0}
+            aria-label="Previous listen"
+            onClick={() => move(-1)}
+          >
             <ArrowLeft />
           </button>
           <span>
-            {String(active + 1).padStart(2, "0")} /{" "}
-            {String(count).padStart(2, "0")}
+            {String(active + 1).padStart(personal ? 3 : 2, "0")} /{" "}
+            {String(count).padStart(personal ? 3 : 2, "0")}
           </span>
-          <button aria-label="Next listen" onClick={() => move(1)}>
+          <button
+            disabled={!!personal && active >= count - 1}
+            aria-label="Next listen"
+            onClick={() => move(1)}
+          >
             <ArrowRight />
           </button>
         </div>

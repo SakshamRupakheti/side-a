@@ -1,3 +1,4 @@
+import type { DeckChange } from "../shared/diary";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -39,7 +40,7 @@ type Props = {
   signedIn: boolean;
   authenticate: (draft: Draft) => void;
   close: () => void;
-  done: () => Promise<void>;
+  done: (change: DeckChange) => Promise<void>;
 };
 
 export function EntryComposer({
@@ -259,12 +260,16 @@ export function EntryComposer({
       return;
     }
     await status.run(async () => {
-      await api(
+      const result = await api<{ id: string }>(
         entry ? "/me/entries/" + entry.id : "/me/entries",
         entry ? "PUT" : "POST",
         { ...data, ...(entry && { revision: entry.revision }) },
       );
-      await done();
+      await done(
+        entry
+          ? { kind: "edited", id: entry.id }
+          : { kind: "created", id: result.id },
+      );
     });
   }
   const art = coverFor(draft);
@@ -694,7 +699,7 @@ export function EntryComposer({
                   await api("/me/entries/" + entry.id, "DELETE", {
                     revision: entry.revision,
                   });
-                  await done();
+                  await done({ kind: "deleted", id: entry.id });
                 })
               }
             >

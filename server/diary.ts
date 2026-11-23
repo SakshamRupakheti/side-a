@@ -9,6 +9,8 @@ import { parseSource, safeArt } from "./providers";
 import {
   milestones,
   formats,
+  type DeckEntry,
+  type DeckPage,
   type Stats,
   type Profile,
   type Entry,
@@ -205,6 +207,7 @@ export async function entries(
   cursor: Cursor | null = null,
   paged = false,
   sources: ReturnType<typeof parseSource>[] = [],
+  id?: string,
 ) {
   const mediaFilter = sources.length
     ? "AND e.media_id IN (SELECT media_id FROM source WHERE (provider,external_id) IN (" +
@@ -218,6 +221,7 @@ export async function entries(
         ",e.id,e.note,e.replays,e.shared,e.finished_at,e.revision,e.experience" +
         sourceJoin +
         "WHERE e.owner=? " +
+        (id ? "AND e.id=? " : "") +
         mediaFilter +
         (cursor ? "AND (e.updated_at,e.id)<(?,?) " : "") +
         "ORDER BY e.updated_at DESC,e.id DESC" +
@@ -225,6 +229,7 @@ export async function entries(
     )
     .bind(
       owner,
+      ...(id ? [id] : []),
       ...sources.flatMap((s) => [s.provider, s.external_id]),
       ...(cursor ?? []),
     )
@@ -236,6 +241,109 @@ export async function entries(
       ? (JSON.parse(e.experience) as Experience)
       : emptyExperience,
   }));
+}
+export function deckCursor(
+  raw?: string,
+): [string, string, number, number] | null {
+  if (!raw) return null;
+  try {
+    if (raw.length > 240) throw Error();
+    const values = JSON.parse(atob(raw));
+    return z
+      .tuple([
+        z.string().datetime(),
+        z.string().min(1).max(64),
+        z.number().int().nonnegative(),
+        z.number().int().nonnegative(),
+      ])
+      .parse(values);
+  } catch {
+    throw new HTTPException(400, { message: "Invalid collection cursor." });
+  }
+}
+// A single D1 snapshot keeps the page, its absolute positions and its total consistent.
+export async function deckPage(
+  db: D1Database,
+  owner: string,
+  cursor: ReturnType<typeof deckCursor>,
+  direction: "older" | "newer",
+  anchor?: string,
+): Promise<DeckPage> {
+  if ((!cursor && direction === "newer") || (anchor && cursor))
+    throw new HTTPException(400, { message: "Invalid collection window." });
+  const key = "(e.created_at,e.id)";
+  const anchorKey = "(SELECT created_at,id FROM entry WHERE owner=? AND id=?)";
+  const boundary = anchor ? anchorKey : "(?,?)";
+  const args = anchor ? [owner, anchor] : (cursor?.slice(0, 2) ?? []);
+  const hasBoundary = !!anchor || !!cursor;
+  const columns =
+    "SELECT e.id,e.title,e.creator,e.show_name,e.kind,e.artwork,e.status,e.created_at,s.url" +
+    sourceJoin +
+    "WHERE e.owner=?";
+  const page = (newer: boolean, limit: number) =>
+    db
+      .prepare(
+        columns +
+          (hasBoundary
+            ? " AND " + key + (newer ? ">" : anchor ? "<=" : "<") + boundary
+            : "") +
+          (newer
+            ? " ORDER BY e.created_at,e.id"
+            : " ORDER BY e.created_at DESC,e.id DESC") +
+          " LIMIT ?",
+      )
+      .bind(owner, ...args, limit);
+  const totalQuery = db
+    .prepare("SELECT total,revision FROM collection_size WHERE owner=?")
+    .bind(owner);
+  const queries = [
+    totalQuery,
+    page(!anchor && direction === "newer", anchor ? 13 : 25),
+  ];
+  if (anchor)
+    queries.push(
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM entry e WHERE owner=? AND " +
+            key +
+            "<=" +
+            boundary,
+        )
+        .bind(owner, ...args),
+    );
+  if (anchor) queries.push(page(true, 12));
+  const [count, rows, rank, after] = await db.batch(queries);
+  const size = count.results[0] as
+    { total: number; revision: number } | undefined;
+  const total = size?.total ?? 0,
+    revision = size?.revision ?? 0;
+  if (cursor && (cursor[3] !== revision || cursor[2] >= total))
+    throw conflict("The collection changed. Reload its window.");
+  const newer = !anchor && direction === "newer";
+  const before = rows.results as unknown as DeckEntry[];
+  const end = rank
+    ? Number((rank.results[0] as { n: number }).n)
+    : cursor
+      ? cursor[2] + Number(newer)
+      : total;
+  const start = newer ? end : end - before.length;
+  const result = newer
+    ? before
+    : before.reverse().concat((after?.results ?? []) as unknown as DeckEntry[]);
+  if (anchor && !result.some((e) => e.id === anchor)) throw missing();
+  const encode = (e: DeckEntry, index: number) =>
+    btoa(JSON.stringify([e.created_at, e.id, index, revision]));
+  return {
+    entries: result,
+    total,
+    start,
+    revision,
+    next_cursor: start > 0 && result.length ? encode(result[0], start) : null,
+    newer_cursor:
+      start + result.length < total && result.length
+        ? encode(result[result.length - 1], start + result.length - 1)
+        : null,
+  };
 }
 export async function diaryPage(
   db: D1Database,

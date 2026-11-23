@@ -6,6 +6,7 @@ import { Shelf, Discover } from "./Shelf";
 import { Journal, Published } from "./Journal";
 import {
   blank,
+  type DeckChange,
   type Draft,
   type Entry,
   type Stats,
@@ -18,6 +19,9 @@ import "@fontsource/ibm-plex-mono/latin-400.css";
 import { Entrance } from "./Entrance";
 import { picks, draftFromPick } from "./picks";
 import { ListeningDeck } from "./ListeningDeck";
+import { PersonalCollection } from "./PersonalCollection";
+import { RecordView } from "./RecordView";
+import { Modal } from "./ui";
 import { EntryComposer } from "./EntryComposer";
 import "./style.css";
 import "./composer.css";
@@ -28,12 +32,16 @@ type Collection = {
   stats: Stats;
   next_cursor: string | null;
 };
-type Dialog = "auth" | "profile" | "entry" | null;
+type Dialog = "record" | "opening" | "auth" | "profile" | "entry" | null;
 function App() {
   const [session, setSession] = useState<Session | null>(null),
     [modal, setModal] = useState<Dialog>(null);
   const [focusNote, setFocusNote] = useState(false);
   const [saved, setSaved] = useState("");
+  const [change, setChange] = useState<DeckChange | null>(null);
+  const authOwner = React.useRef<string | null>(null);
+  const refreshVersion = React.useRef(0);
+  const detailVersion = React.useRef(0);
   const saving = React.useRef(false);
   const featuredKeys = React.useRef(new Map<string, string>());
   function savedRecord(url: string) {
@@ -54,10 +62,14 @@ function App() {
     try {
       const key = featuredKeys.current.get(d.url) ?? crypto.randomUUID();
       featuredKeys.current.set(d.url, key);
-      await api("/me/entries", "POST", { ...d, import_key: key });
+      const { id } = await api<{ id: string }>("/me/entries", "POST", {
+        ...d,
+        import_key: key,
+      });
       featuredKeys.current.delete(d.url);
+      setChange({ kind: "created", id });
+      setSaved("Added to your collection.");
       await refresh();
-      setSaved("Saved to your archive.");
     } catch (e) {
       setError(message(e));
     } finally {
@@ -77,18 +89,38 @@ function App() {
     discover = path === "/discover",
     lab = path === "/swipe-lab";
   const refresh = useCallback(async () => {
+    const version = ++refreshVersion.current;
     setError("");
     if (isPublic) {
       setPub(await api("/u/" + encodeURIComponent(path.slice(3))));
       return;
     }
     const s = await api<Session>("/session");
+    if (version !== refreshVersion.current) return;
+    if (authOwner.current !== (s.user?.email ?? null)) {
+      if (authOwner.current) {
+        setSelected(undefined);
+        setDraft(undefined);
+        setModal(null);
+      }
+      authOwner.current = s.user?.email ?? null;
+      detailVersion.current++;
+      setChange(null);
+      setDiary(null);
+      setSaved("");
+      featuredKeys.current.clear();
+    }
     setSession(s);
     if (s.user) {
       const featured = new URLSearchParams(
         picks.map((p) => ["featured", p.url]),
       );
-      const collection = await api<Collection>("/me/diary?" + featured);
+      const collection = await api<Collection>(
+        lab || discover || sessionStorage.getItem("pofolio-pending")
+          ? "/me/diary?" + featured
+          : "/me/diary",
+      );
+      if (version !== refreshVersion.current) return;
       setDiary(collection);
       const pending = picks.find(
         (p) => p.art === sessionStorage.getItem("pofolio-pending"),
@@ -119,7 +151,7 @@ function App() {
       } else if (!s.profile) setModal("profile");
     } else setDiary(null);
     return s;
-  }, [isPublic, path]);
+  }, [isPublic, path, lab, discover]);
   useEffect(() => {
     void refresh().catch((e) => setError(message(e)));
   }, [refresh]);
@@ -216,7 +248,63 @@ function App() {
       setDraft(undefined);
     }
   }
+  async function openRecord(id: string, edit: boolean) {
+    const version = ++detailVersion.current;
+    setModal("opening");
+    setError("");
+    try {
+      const item = await api<Entry>("/me/entries/" + encodeURIComponent(id));
+      if (version !== detailVersion.current) return;
+      setSelected(item);
+      setDraft(undefined);
+      setFocusNote(false);
+      setModal(edit ? "entry" : "record");
+    } catch (e) {
+      if (version === detailVersion.current) {
+        setModal(null);
+        setError(message(e));
+      }
+    }
+  }
+  function signedOut() {
+    refreshVersion.current++;
+    detailVersion.current++;
+    authOwner.current = null;
+    setSession(null);
+    setDiary(null);
+    setSelected(undefined);
+    setChange(null);
+    setSaved("");
+    featuredKeys.current.clear();
+    close();
+    localStorage.setItem("suni-session-changed", String(Date.now()));
+    void refresh().catch((e) => setError(message(e)));
+  }
+  useEffect(() => {
+    const changed = (e: StorageEvent) => {
+      if (e.key === "suni-session-changed") location.reload();
+    };
+    const check = async () => {
+      if (document.visibilityState !== "visible" || isPublic) return;
+      try {
+        const s = await api<Session>("/session");
+        if ((s.user?.email ?? null) !== authOwner.current) location.reload();
+      } catch {
+        /* Allow offline use of the open view. */
+      }
+    };
+    const navigate = () => location.reload();
+    window.addEventListener("popstate", navigate);
+    window.addEventListener("storage", changed);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      window.removeEventListener("popstate", navigate);
+      window.removeEventListener("storage", changed);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [isPublic]);
   function close() {
+    detailVersion.current++;
     sessionStorage.removeItem("pofolio-compose-handoff");
     sessionStorage.removeItem("pofolio-pending");
     sessionStorage.removeItem("pofolio-note");
@@ -293,12 +381,24 @@ function App() {
             </button>
           </div>
         )}
-        {(path === "/" || lab) && (
-          <ListeningDeck
-            lab={lab}
-            save={saveFeatured}
-            records={diary?.featured}
-          />
+        {lab ? (
+          <ListeningDeck lab save={saveFeatured} records={diary?.featured} />
+        ) : (
+          path === "/" &&
+          (!session ? (
+            <section className="deck" aria-busy="true">
+              <p role="status">Opening your collection…</p>
+            </section>
+          ) : session.user ? (
+            <PersonalCollection
+              key={session.user.email}
+              change={change}
+              add={compose}
+              open={openRecord}
+            />
+          ) : (
+            <ListeningDeck save={saveFeatured} />
+          ))
         )}
         {saved && (
           <p className="save-feedback" role="status">
@@ -318,7 +418,7 @@ function App() {
           )
         ) : discover ? (
           <Discover save={add} signedIn={!!session?.user} signIn={access} />
-        ) : session?.user ? (
+        ) : !session ? null : session.user ? (
           diary ? (
             <Journal
               items={diary.entries}
@@ -359,6 +459,19 @@ function App() {
           </span>
         </div>
       </footer>
+      <span className="site-watermark">Rupakhetism</span>
+      {modal === "opening" && (
+        <Modal title="Opening record" close={close}>
+          <p role="status">Opening your listen…</p>
+        </Modal>
+      )}
+      {modal === "record" && selected && (
+        <RecordView
+          entry={selected}
+          close={close}
+          edit={() => setModal("entry")}
+        />
+      )}
       {modal === "auth" &&
         (session ? (
           <AuthForm
@@ -376,6 +489,7 @@ function App() {
         ))}
       {modal === "profile" && session && (
         <ProfileForm
+          signedOut={signedOut}
           session={session}
           callbackError={callbackError}
           close={closeAccountDialog}
@@ -390,9 +504,19 @@ function App() {
           initial={draft}
           entry={selected}
           close={close}
-          done={async () => {
+          done={async (result) => {
             close();
-            setSaved("Archive updated.");
+            if (discover && result.kind === "created") {
+              history.pushState(null, "", "/");
+            }
+            setChange(result);
+            setSaved(
+              result.kind === "created"
+                ? "Added to your collection."
+                : result.kind === "deleted"
+                  ? "Listen removed."
+                  : "Listen updated.",
+            );
             await refresh().catch((e) => setError(message(e)));
           }}
         />

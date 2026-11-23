@@ -86,3 +86,26 @@ export function inputSpeed(
     Math.max(0, 1 - (time - last.time) / 80)
   );
 }
+
+export type Bounds = { first: number; last: number };
+export function reducedDestination(m: Motion) {
+  return m.phase === "coast" ? Math.round(m.position) : m.target;
+}
+export function boundMotion(m: Motion, b?: Bounds): Motion {
+  if (b) {
+    const clamp = (v: number) => Math.max(b.first, Math.min(b.last, v));
+    const edge = clamp(m.position);
+    if (m.phase === "drag" && b.first !== b.last && edge !== m.position) {
+      const delta = m.position - edge;
+      m = {
+        ...m,
+        position: edge + 0.18 * Math.tanh(delta / 0.5),
+        target: edge,
+      };
+    } else if (edge !== m.position && m.phase !== "drag") {
+      m = { ...stopped(edge), phase: "snap", target: clamp(m.target) };
+      if (m.target === edge) m = stopped(edge);
+    } else m = { ...m, position: edge, target: clamp(m.target) };
+  }
+  return m;
+}

@@ -14,6 +14,8 @@ import {
   entryInput,
   entries,
   diaryPage,
+  deckPage,
+  deckCursor,
   decodeCursor,
   statistics,
   createEntry,
@@ -165,6 +167,35 @@ app.put("/api/me/profile", async (c) => {
   const p = profileInput.parse(await c.req.json());
   await saveProfile(c.env.DB, c.get("owner"), p);
   return c.json(p);
+});
+app.get("/api/me/deck", async (c) => {
+  const cursor = deckCursor(c.req.query("cursor"));
+  const direction = z
+    .enum(["older", "newer"])
+    .default("older")
+    .parse(c.req.query("direction"));
+  return c.json(
+    await deckPage(
+      c.env.DB,
+      c.get("owner"),
+      cursor,
+      direction,
+      c.req.query("anchor"),
+    ),
+  );
+});
+app.get("/api/me/entries/:id", async (c) => {
+  const [entry] = await entries(
+    c.env.DB,
+    c.get("owner"),
+    null,
+    false,
+    [],
+    c.req.param("id"),
+  );
+  if (!entry)
+    throw new HTTPException(404, { message: "This record is unavailable." });
+  return c.json(entry);
 });
 app.get("/api/me/diary", async (c) => {
   const owner = c.get("owner");

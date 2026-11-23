@@ -33,7 +33,10 @@ export function AuthForm({
     (provider) => session.methods[provider],
   );
   return (
-    <Modal title={signup ? "Start your suni. diary" : "Welcome back to suni."} close={close}>
+    <Modal
+      title={signup ? "Start your suni. diary" : "Welcome back to suni."}
+      close={close}
+    >
       <ErrorText text={callbackError} />
       {enabled.length > 0 && (
         <div className="social">
@@ -116,7 +119,12 @@ export function ProfileForm({
   callbackError,
   close,
   done,
-}: { session: Session; callbackError: string } & FormProps) {
+  signedOut,
+}: {
+  signedOut: () => void;
+  session: Session;
+  callbackError: string;
+} & FormProps) {
   const [p, set] = useState<Profile>(
     session.profile || {
       ...emptyProfile,
@@ -223,7 +231,7 @@ export function ProfileForm({
           onClick={() =>
             void act.run(async () => {
               await api("/auth/sign-out", "POST", {});
-              await done();
+              signedOut();
             })
           }
         >
@@ -237,7 +245,7 @@ export function ProfileForm({
             e.preventDefault();
             void act.run(async () => {
               await api("/me/account", "DELETE", { confirmation: confirm });
-              await done();
+              signedOut();
             });
           }}
         >

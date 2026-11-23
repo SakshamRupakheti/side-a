@@ -90,6 +90,11 @@ test(
     await request("/me/profile", "PUT", profile, b, 409);
     await request("/me/profile", "PUT", { ...profile, username: "noel" }, b);
     await request("/u/mira", "GET", undefined, "", 404);
+    const deck = async (cookie = a, query = "") =>
+      (await request("/me/deck" + query, "GET", undefined, cookie)).data;
+    await request("/me/deck", "GET", undefined, "", 401);
+    assert.deepEqual((await deck()).entries, []);
+    assert.equal((await deck()).total, 0);
     const base = {
       url: "https://youtu.be/jfKfPfyJRdk?t=12",
       title: "A listening test",
@@ -121,6 +126,28 @@ test(
       b,
       201,
     );
+    const one = await deck();
+    assert.equal(one.total, 1);
+    assert.equal(one.entries[0].id, id);
+    assert.equal(one.entries[0].status, "want");
+    assert.equal((await deck(b)).entries[0].title, "Noel’s private title");
+    for (const field of [
+      "experience",
+      "note",
+      "takeaway",
+      "owner",
+      "email",
+      "shared",
+    ])
+      assert.ok(!(field in one.entries[0]));
+    assert.equal(
+      (await request("/me/entries/" + id, "GET", undefined, a)).data.note,
+      base.note,
+    );
+    await request("/me/entries/" + id, "GET", undefined, b, 404);
+    await request("/me/deck?anchor=" + id, "GET", undefined, b, 404);
+    await request("/me/deck?direction=newer", "GET", undefined, a, 400);
+    await request("/me/deck?cursor=bad", "GET", undefined, a, 400);
     const retryDraft = {
       ...base,
       url: "",
@@ -131,6 +158,11 @@ test(
       [1, 2].map(() => request("/me/entries", "POST", retryDraft, a, 201)),
     );
     assert.equal(retried.data.id, first.data.id);
+    assert.equal((await deck()).total, 2);
+    assert.deepEqual(
+      (await deck()).entries.map((e) => e.id),
+      [id, first.data.id],
+    );
     await request(
       "/me/entries",
       "POST",
@@ -495,6 +527,37 @@ test(
         );
       }
     }
+    const latestDeck = await deck();
+    assert.equal(latestDeck.total, 103);
+    assert.equal(latestDeck.entries.length, 25);
+    assert.equal(latestDeck.start, 78);
+    const allCovers = [...latestDeck.entries];
+    let earlier = latestDeck;
+    while (earlier.next_cursor) {
+      earlier = await deck(
+        a,
+        "?cursor=" + encodeURIComponent(earlier.next_cursor),
+      );
+      allCovers.unshift(...earlier.entries);
+    }
+    assert.equal(allCovers.length, 103);
+    assert.equal(new Set(allCovers.map((e) => e.id)).size, 103);
+    assert.deepEqual(
+      allCovers.map((e) => e.created_at),
+      allCovers.map((e) => e.created_at).sort(),
+    );
+    assert.equal(allCovers[0].id, id);
+    assert.equal(allCovers[0].created_at, one.entries[0].created_at);
+    const next = await deck(
+      a,
+      "?direction=newer&cursor=" + encodeURIComponent(earlier.newer_cursor),
+    );
+    assert.equal(next.start, earlier.entries.length);
+    assert.equal(next.entries[0].id, allCovers[next.start].id);
+    const middle = await deck(a, "?anchor=" + allCovers[45].id);
+    assert.equal(middle.start, 33);
+    assert.equal(middle.entries[12].id, allCovers[45].id);
+    assert.deepEqual((await deck()).entries, latestDeck.entries);
     const ownerPage = (await request("/me/diary", "GET", undefined, a)).data;
     assert.equal(ownerPage.entries.length, 25);
     const hiddenOnFirst = await request(
@@ -555,6 +618,55 @@ test(
     const owner = (
       await DB.prepare("SELECT id FROM user WHERE name='mira'").first()
     ).id;
+    // Large foreign collection with tied timestamps. Each API request should
+    // visit one chronological index page and return only lightweight covers.
+    const manyOwner = (
+      await DB.prepare("SELECT id FROM user WHERE name='noel'").first()
+    ).id;
+    const sequence =
+      "WITH RECURSIVE seq(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM seq WHERE n<1025) ";
+    await DB.batch([
+      DB.prepare(
+        sequence + "INSERT INTO media SELECT printf('large-%04d',n) FROM seq",
+      ),
+      DB.prepare(
+        "INSERT INTO source SELECT 'manual',id,'',id FROM media WHERE id GLOB 'large-*'",
+      ),
+      DB.prepare(
+        "INSERT INTO entry(id,owner,media_id,provider,external_id,title,creator,show_name,artwork,kind,status,created_at,updated_at) SELECT media_id,?,media_id,provider,external_id,media_id,'','','',CASE cast(substr(media_id,7) as integer)%3 WHEN 0 THEN 'podcast' WHEN 1 THEN 'audiobook' ELSE 'documentary' END, 'want','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z' FROM source WHERE media_id GLOB 'large-*'",
+      ).bind(manyOwner),
+    ]);
+    let many = await deck(b);
+    const stale = many.next_cursor;
+    assert.equal(many.total, 1026);
+    assert.equal(many.start, 1001);
+    const ids = new Set(),
+      kinds = new Set();
+    while (true) {
+      for (const entry of many.entries) {
+        assert.ok(!ids.has(entry.id));
+        ids.add(entry.id);
+        kinds.add(entry.kind);
+      }
+      if (!many.next_cursor) break;
+      many = await deck(b, "?cursor=" + encodeURIComponent(many.next_cursor));
+    }
+    assert.equal(ids.size, 1026);
+    assert.equal(kinds.size, 3);
+    await DB.prepare("DELETE FROM entry WHERE id=? AND owner=?")
+      .bind("large-0001", manyOwner)
+      .run();
+    await request(
+      "/me/deck?cursor=" + encodeURIComponent(stale),
+      "GET",
+      undefined,
+      b,
+      409,
+    );
+    assert.equal((await deck(b)).total, 1025);
+    await DB.prepare("DELETE FROM entry WHERE owner=? AND id GLOB 'large-*'")
+      .bind(manyOwner)
+      .run();
     for (const [filter, index] of [
       ["", "entry_history"],
       [" AND shared=1", "public_history"],

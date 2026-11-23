@@ -9,6 +9,9 @@ import {
 } from "react";
 import {
   advance,
+  boundMotion,
+  reducedDestination,
+  type Bounds,
   inputSpeed,
   recordSample,
   released,
@@ -24,10 +27,18 @@ export type SwipeReading = {
   elapsed: number;
   interrupted: boolean;
 };
-export function useKineticSwipe(settings: Tuning) {
+export function useKineticSwipe(
+  settings: Tuning,
+  bounds?: Bounds,
+  initial = 0,
+) {
   const stage = useRef<HTMLDivElement>(null);
-  const [motion, setMotion] = useState(() => stopped(0));
+  const [motion, setMotion] = useState(() => stopped(initial));
   const [reading, setReading] = useState<SwipeReading | null>(null);
+  const limits = useRef(bounds);
+  useLayoutEffect(() => {
+    limits.current = bounds;
+  }, [bounds]);
   const live = useRef(motion),
     tuning = useRef(settings),
     animation = useRef(0);
@@ -51,6 +62,7 @@ export function useKineticSwipe(settings: Tuning) {
     tuning.current = settings;
   }, [settings]);
   const publish = useCallback((m: Motion) => {
+    m = boundMotion(m, limits.current);
     live.current = m;
     setMotion(m);
   }, []);
@@ -73,11 +85,7 @@ export function useKineticSwipe(settings: Tuning) {
   const animate = useCallback(
     (start: Motion) => {
       if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        publish(
-          stopped(
-            start.phase === "coast" ? Math.round(start.position) : start.target,
-          ),
-        );
+        publish(stopped(reducedDestination(start)));
         finishReading(false);
         return;
       }
@@ -89,7 +97,7 @@ export function useKineticSwipe(settings: Tuning) {
         last = now;
         const next = advance(live.current, dt, tuning.current.damping);
         publish(next);
-        if (next.phase !== "rest")
+        if (live.current.phase !== "rest")
           animation.current = requestAnimationFrame(frame);
         else finishReading(false);
       }
@@ -108,6 +116,14 @@ export function useKineticSwipe(settings: Tuning) {
       });
     },
     [cancel, animate],
+  );
+  const place = useCallback(
+    (slot: number) => {
+      cancel();
+      gesture.current = null;
+      publish(stopped(slot));
+    },
+    [cancel, publish],
   );
   function move(direction: number) {
     select(
@@ -197,6 +213,10 @@ export function useKineticSwipe(settings: Tuning) {
     // Commit the first displacement in the input event; batch subsequent samples.
     if (firstMove) flushSync(() => publish(next));
     else publish(next);
+    // Discard displacement absorbed by an unloaded edge. When its page arrives,
+    // the next pointer sample continues from the visible position.
+    if (live.current.position !== position)
+      g.origin = live.current.position + dx / g.unit;
   }
   function release(e: PointerEvent<HTMLDivElement>) {
     const g = gesture.current;
@@ -232,6 +252,7 @@ export function useKineticSwipe(settings: Tuning) {
     reading,
     select,
     move,
+    place,
     suppressClick,
     handlers: {
       onPointerDown: down,

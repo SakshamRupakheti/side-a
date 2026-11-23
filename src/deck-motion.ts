@@ -2,13 +2,25 @@ export function wrapSlot(slot: number, count: number) {
   return ((slot % count) + count) % count;
 }
 
-export function deckFrame(position: number, count: number) {
+export function deckFrame(
+  position: number,
+  count: number,
+  bounds?: { first: number; last: number },
+) {
+  if (!count) return { active: -1, cards: [] };
   // At an exact midpoint the higher logical slot wins, including across the seam.
   const nearest = Math.floor(position + 0.5);
-  const active = wrapSlot(nearest, count);
-  const cards = Array.from({ length: count }, (_, index) => {
-    let offset = wrapSlot(index - active, count) - (position - nearest);
-    if (offset > count / 2) offset -= count;
+  const active = bounds
+    ? Math.max(bounds.first, Math.min(bounds.last, nearest))
+    : wrapSlot(nearest, count);
+  const first = bounds ? Math.max(bounds.first, active - 3) : 0;
+  const last = bounds ? Math.min(bounds.last, active + 3) : count - 1;
+  const cards = Array.from({ length: last - first + 1 }, (_, slot) => {
+    const index = first + slot;
+    let offset = bounds
+      ? index - position
+      : wrapSlot(index - active, count) - (position - nearest);
+    if (!bounds && offset > count / 2) offset -= count;
     const depth = Math.abs(offset);
     // Guide only the inner pair past each other's edges at the handoff.
     // Integer slots retain the original fan geometry at both breakpoints.
