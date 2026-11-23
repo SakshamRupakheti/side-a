@@ -1,0 +1,70 @@
+.swipe-controls {
+  border-top: 1px solid var(--rule);
+  padding: 20px 0 36px;
+}
+.lab-heading,
+.swipe-sliders label,
+.lab-reading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lab-heading h2 {
+  font-size: clamp(21px, 2vw, 30px);
+}
+.swipe-sliders {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin: 20px 0;
+}
+.swipe-sliders label {
+  font-weight: 700;
+}
+.swipe-sliders label span,
+.lab-reading dd {
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.swipe-sliders input[type="range"] {
+  height: 30px;
+  padding: 0;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+.lab-reading {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--rule);
+  padding-top: 12px;
+}
+.lab-reading > span,
+.lab-reading p,
+.lab-reading dt {
+  color: var(--soft);
+  font-size: 13px;
+}
+.lab-reading dl {
+  display: flex;
+  gap: 20px;
+  margin: 0;
+}
+.lab-reading dd {
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .swipe-sliders {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .lab-reading dl,
+  .lab-reading p {
+    flex-basis: 100%;
+  }
+  .swipe-controls {
+    padding-inline: 3px;
+  }
+}

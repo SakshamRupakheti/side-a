@@ -13,7 +13,8 @@ export function deckFrame(position: number, count: number) {
     // Guide only the inner pair past each other's edges at the handoff.
     // Integer slots retain the original fan geometry at both breakpoints.
     const t = depth < 0.5 ? 2 * depth : Math.min(1, 2 * depth - 1);
-    const eased = t * t * (3 - 2 * t);
+    // Keep a nonzero slope at center so a tiny drag visibly moves the cover.
+    const eased = depth < 0.5 ? t * (1 + t - t * t) : t * t * (3 - 2 * t);
     const side = Math.sign(offset);
     const stride = depth >= 1 ? offset : depth < 0.5 ? 0 : side * eased;
     const clearance = depth >= 1 ? 0 : side * (depth < 0.5 ? eased : 1 - eased);
@@ -26,32 +27,4 @@ export function deckFrame(position: number, count: number) {
     card.layer = count - rank;
   });
   return { active, cards };
-}
-
-export function releaseTarget(
-  position: number,
-  velocity: number,
-  count: number,
-) {
-  // Velocity is measured in slots per millisecond. Keep a flick shorter than a lap.
-  const limit = Math.floor(count / 2);
-  const coast = Math.max(-limit, Math.min(limit, velocity * 155));
-  return Math.floor(position + coast + 0.5);
-}
-
-// CSS cubic-bezier(.2, .88, .22, 1.07), sampled on the shared position clock.
-export function sleeveEase(time: number) {
-  if (time <= 0 || time >= 1) return time;
-  function cubic(t: number, a: number, b: number) {
-    const u = 1 - t;
-    return 3 * u * u * t * a + 3 * u * t * t * b + t * t * t;
-  }
-  let lo = 0,
-    hi = 1;
-  for (let i = 0; i < 14; i++) {
-    const mid = (lo + hi) / 2;
-    if (cubic(mid, 0.2, 0.22) < time) lo = mid;
-    else hi = mid;
-  }
-  return cubic((lo + hi) / 2, 0.88, 1.07);
 }

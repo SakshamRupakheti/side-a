@@ -66,7 +66,8 @@ function App() {
     [pub, setPub] = useState<PublicPage | null>(null);
   const path = location.pathname.replace(/\/$/, "") || "/",
     isPublic = path.startsWith("/u/"),
-    discover = path === "/discover";
+    discover = path === "/discover",
+    lab = path === "/swipe-lab";
   const refresh = useCallback(async () => {
     setError("");
     if (isPublic) {
@@ -214,7 +215,7 @@ function App() {
     setModal(null);
     setDraft(undefined);
   }
-  const unknown = !(isPublic || discover || path === "/");
+  const unknown = !(isPublic || discover || lab || path === "/");
   return (
     <>
       <a href="#content" className="skip">
@@ -222,7 +223,7 @@ function App() {
       </a>
       {path === "/" && <Entrance />}
       <Header
-        active={isPublic ? "" : discover ? "discover" : "diary"}
+        active={isPublic || lab ? "" : discover ? "discover" : "diary"}
         session={session}
         open={access}
         add={compose}
@@ -239,8 +240,12 @@ function App() {
             </button>
           </div>
         )}
-        {path === "/" && (
-          <ListeningDeck save={saveFeatured} records={diary?.entries} />
+        {(path === "/" || lab) && (
+          <ListeningDeck
+            lab={lab}
+            save={saveFeatured}
+            records={diary?.entries}
+          />
         )}
         {saved && (
           <p className="save-feedback" role="status">
@@ -252,7 +257,7 @@ function App() {
             <h1>Page unavailable.</h1>
             <a href="/">Return to the diary</a>
           </section>
-        ) : isPublic ? (
+        ) : lab ? null : isPublic ? (
           pub ? (
             <Published page={pub} />
           ) : (

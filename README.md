@@ -17,6 +17,8 @@ Open **http://127.0.0.1:8787**. Choose **Sign in** and **Create a new diary** to
 
 ## Use the diary
 
+Open the [local swipe lab](http://127.0.0.1:8787/swipe-lab) to try the homepage carousel with adjustable sensitivity, momentum and damping. Each release reports launch speed, distance from the release point and elapsed time. Lab adjustments apply to the current lab visit.
+
 1. Choose **Add a listen** and save a title, or paste a source link and select **Import details**. Review the cover, creator, category, original description and duration. You can supply any missing details.
 2. Use **Reflection** to describe the listen in your own words and record what stayed with you. **Moments** accepts optional timestamps in HH:MM:SS. Open the saved title in your archive to revisit it. Descriptions, reflections, moments and notes are private. A public takeaway appears when you share the entry and publish your profile.
 3. Mark a podcast episode finished to count it toward milestones. Record additional full listens in the replay field. The same provider item can occur once per listener.
