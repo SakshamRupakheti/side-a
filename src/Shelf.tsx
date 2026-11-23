@@ -84,7 +84,15 @@ export function Shelf({
     </section>
   );
 }
-export function Discover({ save }: { save: (d: Draft) => void }) {
+export function Discover({
+  save,
+  signedIn,
+  signIn,
+}: {
+  save: (d: Draft) => void;
+  signedIn: boolean;
+  signIn: () => void;
+}) {
   const [q, setQ] = useState(""),
     [result, setResult] = useState<{
       source: string;
@@ -107,6 +115,10 @@ export function Discover({ save }: { save: (d: Draft) => void }) {
           className="searchbar"
           onSubmit={(e) => {
             e.preventDefault();
+            if (!signedIn) {
+              signIn();
+              return;
+            }
             void act.run(async () => {
               setResult(null);
               setResult(await api("/search?q=" + encodeURIComponent(q)));
@@ -119,12 +131,16 @@ export function Discover({ save }: { save: (d: Draft) => void }) {
             placeholder="Search for a podcast or creator"
             minLength={2}
             maxLength={100}
-            required
+            required={signedIn}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
           <button className="button" disabled={act.busy}>
-            {act.busy ? "Searching…" : "Search"}
+            {act.busy
+              ? "Searching…"
+              : signedIn
+                ? "Search"
+                : "Sign in to search"}
           </button>
         </form>
         <ErrorText text={act.error} />

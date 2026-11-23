@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -51,13 +51,37 @@ export function EntryComposer({
   close,
   done,
 }: Props) {
-  const [draft, setDraft] = useState<Draft>(entry ?? initial ?? blank);
+  const [draft, setDraft] = useState<Draft>(
+    () =>
+      entry ?? {
+        ...(initial ?? blank),
+        import_key: initial?.import_key ?? crypto.randomUUID(),
+      },
+  );
   const [step, setStep] = useState(focusNote ? 1 : 0);
   const [duration, setDuration] = useState(
     draft.experience.duration_seconds
       ? clockTime(draft.experience.duration_seconds)
       : "",
   );
+  const [origin, setOrigin] = useState<
+    NonNullable<Experience["duration_origin"]>
+  >(draft.experience.duration_origin ?? "unknown");
+  const initialValues = useRef({ draft, duration });
+  const dirty =
+    !!initial?.import_key ||
+    initialValues.current.draft !== draft ||
+    duration !== initialValues.current.duration;
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  useEffect(() => {
+    if (!dirty) return;
+    const protect = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protect);
+    return () => window.removeEventListener("beforeunload", protect);
+  }, [dirty]);
   const [hint, setHint] = useState("");
   const [invalid, setInvalid] = useState("");
   const [importing, setImporting] = useState(false);
@@ -66,7 +90,9 @@ export function EntryComposer({
   const lastImport = useRef<Metadata | null>(null);
 
   const status = useAction();
-  const ids = useRef(draft.experience.moments.map(() => crypto.randomUUID()));
+  const ids = useRef(
+    draft.experience.moments.map((m, i) => m.id ?? "legacy-" + i),
+  );
   const experience = draft.experience;
   const seconds = timestampSeconds(duration.trim());
   const busy = status.busy || importing;
@@ -79,7 +105,7 @@ export function EntryComposer({
       experience: { ...prev.experience, [key]: value },
     }));
   }
-  function moment(index: number, key: keyof Moment, value: string) {
+  function moment(index: number, key: keyof Moment, value: string | boolean) {
     personal(
       "moments",
       experience.moments.map((m, i) =>
@@ -129,9 +155,12 @@ export function EntryComposer({
       experience: {
         ...experience,
         duration_seconds: seconds,
-        moments: experience.moments.filter(
-          (m) => m.title.trim() || m.timestamp.trim() || m.description.trim(),
-        ),
+        duration_origin: seconds ? origin : ("unknown" as const),
+        moments: experience.moments
+          .map((m, i) => ({ ...m, id: ids.current[i] }))
+          .filter(
+            (m) => m.title.trim() || m.timestamp.trim() || m.description.trim(),
+          ),
       },
     };
   }
@@ -164,10 +193,10 @@ export function EntryComposer({
             prev.experience.source_description || result.source_description,
         },
       }));
-      if (result.duration_seconds)
-        setDuration(
-          (current) => current || clockTime(result.duration_seconds!),
-        );
+      if (result.duration_seconds && !duration) {
+        setDuration(clockTime(result.duration_seconds));
+        setOrigin("provider");
+      }
       setHint(
         result.available
           ? "Details imported. Review them below."
@@ -243,10 +272,29 @@ export function EntryComposer({
     <Modal
       title={entry ? "Edit your listen" : "Add to suni."}
       close={() => {
-        if (!status.busy) close();
+        if (!status.busy) {
+          if (dirty) setConfirmDiscard(true);
+          else close();
+        }
       }}
       cinematic
     >
+      {confirmDiscard && (
+        <section role="alert" aria-label="Unsaved changes">
+          <p>Discard your unsaved changes?</p>
+          <button
+            type="button"
+            className="button"
+            autoFocus
+            onClick={() => setConfirmDiscard(false)}
+          >
+            Keep editing
+          </button>
+          <button type="button" className="plainlink" onClick={close}>
+            Discard changes
+          </button>
+        </section>
+      )}
       <div className="composer-steps" role="group" aria-label="Composer steps">
         {steps.map((s, i) => (
           <button
@@ -358,7 +406,11 @@ export function EntryComposer({
                     placeholder="HH:MM:SS"
                     maxLength={10}
                     value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
+                    disabled={importing}
+                    onChange={(e) => {
+                      setDuration(e.target.value);
+                      setOrigin("manual");
+                    }}
                   />
                 </label>
                 {draft.kind === "podcast" && (
@@ -442,8 +494,8 @@ export function EntryComposer({
           <section className="composer-page" aria-label="Moments">
             <h3>Favorite moments</h3>
             <p className="muted">
-              Keep a quote, an idea, or a point in time. These moments are
-              private.
+              Keep a quote, an idea, or a point in time. Each moment is private
+              until you choose to share it.
             </p>
             {experience.moments.map((m, i) => (
               <fieldset className="moment" key={ids.current[i]}>
@@ -473,6 +525,14 @@ export function EntryComposer({
                     value={m.description}
                     onChange={(e) => moment(i, "description", e.target.value)}
                   />
+                </label>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={!!m.shared}
+                    onChange={(e) => moment(i, "shared", e.target.checked)}
+                  />{" "}
+                  Share this moment with this entry on my published profile
                 </label>
                 <button
                   type="button"
@@ -590,8 +650,8 @@ export function EntryComposer({
             <small>
               A published profile shows this listen’s title, creator, show,
               cover, category, source, status, rating, update date and public
-              takeaway. Your descriptions, moments, reflection and notes stay
-              private.
+              takeaway, plus any moments you choose to share. Your personal
+              description, reflection and notes stay private.
             </small>
           </div>
         </details>

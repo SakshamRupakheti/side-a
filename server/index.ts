@@ -1,9 +1,11 @@
+import { createMiddleware } from "hono/factory";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { auth, methods, type Env } from "./auth";
-import { metadata, searchShows } from "./providers";
+import { retryAfter } from "./throttle";
+import { metadata, searchShows, parseSource } from "./providers";
 import { socialProviders } from "../shared/sign-in";
 import {
   getProfile,
@@ -11,16 +13,19 @@ import {
   profileInput,
   entryInput,
   entries,
+  diaryPage,
+  decodeCursor,
   statistics,
   createEntry,
   updateEntry,
   publicPage,
 } from "./diary";
 
-const app = new Hono<{
+type AppEnv = {
   Bindings: Env;
   Variables: { owner: string; signedInAt: Date; email: string; name: string };
-}>();
+};
+const app = new Hono<AppEnv>();
 app.use("/api/*", async (c, next) => {
   c.header("Cache-Control", "private, no-store");
   c.header("X-Content-Type-Options", "nosniff");
@@ -31,6 +36,19 @@ app.use("/api/*", async (c, next) => {
     throw new HTTPException(403, {
       message: "Submit changes from the diary website.",
     });
+  if (c.req.path.startsWith("/api/u/")) {
+    const wait = retryAfter(
+      "profile:" + (c.req.header("CF-Connecting-IP") ?? "local"),
+      60,
+    );
+    if (wait) {
+      c.header("Retry-After", String(wait));
+      return c.json(
+        { error: "Please wait a moment before opening more profiles." },
+        429,
+      );
+    }
+  }
   await next();
 });
 app.use("/api/*", (c, next) =>
@@ -96,21 +114,52 @@ app.get("/api/session", async (c) => {
   });
 });
 app.get("/api/u/:username", async (c) =>
-  c.json(await publicPage(c.env.DB, c.req.param("username"))),
+  c.json(
+    await publicPage(
+      c.env.DB,
+      c.req.param("username"),
+      decodeCursor(c.req.query("cursor")),
+    ),
+  ),
 );
-app.get("/api/search", async (c) => {
-  const term = z.string().trim().min(2).max(100).parse(c.req.query("q"));
-  return c.json(await searchShows(term, c.env));
-});
-app.use("/api/me/*", async (c, next) => {
+const requireSession = createMiddleware<AppEnv>(async (c, next) => {
   const data = await auth(c.env).api.getSession({ headers: c.req.raw.headers });
   if (!data)
     throw new HTTPException(401, { message: "Sign in to open your diary." });
+  const upstream = ["/api/search", "/api/me/metadata"].includes(c.req.path);
+  if (upstream && c.env.DISABLE_LOOKUPS === "true")
+    return c.json(
+      {
+        error:
+          "Directory and metadata lookups are paused. You can still save a title or source link.",
+      },
+      503,
+    );
+  const mutation = c.req.method !== "GET";
+  const wait = upstream
+    ? retryAfter("lookup:" + data.user.id, 10) ||
+      (c.req.path === "/api/search" && retryAfter("directory", 18))
+    : mutation
+      ? retryAfter("write:" + data.user.id, 180)
+      : 0;
+  if (wait) {
+    c.header("Retry-After", String(wait));
+    return c.json(
+      { error: "Too many requests. Try again in " + wait + " seconds." },
+      429,
+    );
+  }
   c.set("owner", data.user.id);
   c.set("signedInAt", data.session.createdAt);
   c.set("email", data.user.email);
   c.set("name", data.user.name);
   await next();
+});
+app.use("/api/me/*", requireSession);
+app.use("/api/search", requireSession);
+app.get("/api/search", async (c) => {
+  const term = z.string().trim().min(2).max(100).parse(c.req.query("q"));
+  return c.json(await searchShows(term, c.env));
 });
 app.put("/api/me/profile", async (c) => {
   const p = profileInput.parse(await c.req.json());
@@ -119,11 +168,18 @@ app.put("/api/me/profile", async (c) => {
 });
 app.get("/api/me/diary", async (c) => {
   const owner = c.get("owner");
-  const [items, stats] = await Promise.all([
-    entries(c.env.DB, owner),
+  // The stage still offers Edit for saved shelf picks beyond the first archive page.
+  const featured = z
+    .array(z.string().min(1).max(2048))
+    .max(8)
+    .parse(c.req.queries("featured") ?? [])
+    .map(parseSource);
+  const [items, stats, shelf] = await Promise.all([
+    diaryPage(c.env.DB, owner, decodeCursor(c.req.query("cursor"))),
     statistics(c.env.DB, owner),
+    featured.length ? entries(c.env.DB, owner, null, true, featured) : [],
   ]);
-  return c.json({ entries: items, stats });
+  return c.json({ ...items, stats, featured: shelf });
 });
 app.post("/api/me/metadata", async (c) => {
   const { url } = z
@@ -218,6 +274,19 @@ app.onError((err, c) => {
     );
   if (err instanceof SyntaxError)
     return c.json({ error: "Invalid JSON request." }, 400);
+  if (
+    /D1.*(?:quota|limit exceeded|exceeded.{0,100}limit|daily.{0,60}limit|storage.{0,40}limit|overload|too many requests|temporarily unavailable)/i.test(
+      String(err),
+    )
+  ) {
+    c.header("Retry-After", "60");
+    return c.json(
+      {
+        error: "The diary is temporarily at capacity. Please try again later.",
+      },
+      503,
+    );
+  }
   console.error("Request failed", c.req.method, c.req.routePath, err.name);
   return c.json(
     { error: "The diary could not complete this request. Please try again." },

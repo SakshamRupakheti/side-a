@@ -1,0 +1,14 @@
+{
+  "name": "suni-oauth-test",
+  "main": "./oauth-fixture-worker.ts",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fixture",
+      "database_id": "00000000-0000-4000-8000-000000000099",
+      "migrations_dir": "../migrations",
+    },
+  ],
+}

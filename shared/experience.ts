@@ -1,9 +1,12 @@
 export interface Moment {
+  id?: string;
+  shared?: boolean;
   timestamp: string;
   title: string;
   description: string;
 }
 export interface Experience {
+  duration_origin?: "manual" | "provider" | "unknown";
   source_description: string;
   duration_seconds: number | null;
   personal_description: string;

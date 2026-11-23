@@ -32,15 +32,22 @@ export const profileInput = z.object({
   show_badges: z.boolean(),
 });
 export const entryInput = z.object({
+  import_key: z.string().uuid().optional(),
   experience: z
     .object({
       source_description: line(8000),
+      duration_origin: z.enum(["provider", "manual", "unknown"]).optional(),
       duration_seconds: z.number().int().positive().max(35999999).nullable(),
       personal_description: line(8000),
       reflection: line(8000),
       moments: z
         .array(
           z.object({
+            id: z
+              .string()
+              .regex(/^(?:[a-f0-9-]{36}|legacy-\d{1,2})$/)
+              .optional(),
+            shared: z.boolean().optional(),
             timestamp: line(10),
             title: line(140),
             description: line(1500),
@@ -49,6 +56,21 @@ export const entryInput = z.object({
         .max(24),
     })
     .superRefine((value, ctx) => {
+      const ids = value.moments.flatMap((m) => (m.id ? [m.id] : []));
+      if (new Set(ids).size !== ids.length)
+        ctx.addIssue({
+          code: "custom",
+          message: "Moment identifiers must be unique.",
+        });
+      if (
+        value.duration_seconds === null &&
+        value.duration_origin &&
+        value.duration_origin !== "unknown"
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "A duration is required for this provenance.",
+        });
       value.moments.forEach((moment, index) => {
         const seconds = timestampSeconds(moment.timestamp);
         if (
@@ -146,16 +168,66 @@ const sourceJoin =
   " FROM entry e JOIN source s ON e.provider=s.provider AND e.external_id=s.external_id ";
 const publicColumns =
   "e.title,e.creator,e.show_name,e.artwork,e.kind,e.status,e.rating,e.takeaway,e.updated_at,s.url";
-export async function entries(db: D1Database, owner: string) {
+type Cursor = [string, string];
+export function decodeCursor(raw?: string): Cursor | null {
+  if (!raw) return null;
+  try {
+    if (raw.length > 180) throw Error();
+    const pair = JSON.parse(atob(raw));
+    if (
+      !Array.isArray(pair) ||
+      pair.length !== 2 ||
+      typeof pair[0] !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(pair[0]) ||
+      typeof pair[1] !== "string" ||
+      !/^[a-zA-Z0-9-]{1,64}$/.test(pair[1])
+    )
+      throw Error();
+    return [pair[0], pair[1]];
+  } catch {
+    throw new HTTPException(400, { message: "Invalid page cursor." });
+  }
+}
+function pageOf<T extends { updated_at: string; id: string }>(rows: T[]) {
+  const entries = rows.slice(0, 25),
+    last = entries.at(-1);
+  return {
+    entries,
+    next_cursor:
+      rows.length > 25 && last
+        ? btoa(JSON.stringify([last.updated_at, last.id]))
+        : null,
+  };
+}
+export async function entries(
+  db: D1Database,
+  owner: string,
+  cursor: Cursor | null = null,
+  paged = false,
+  sources: ReturnType<typeof parseSource>[] = [],
+) {
+  const mediaFilter = sources.length
+    ? "AND e.media_id IN (SELECT media_id FROM source WHERE (provider,external_id) IN (" +
+      sources.map(() => "(?,?)").join(",") +
+      ")) "
+    : "";
   const { results } = await db
     .prepare(
       "SELECT " +
         publicColumns +
         ",e.id,e.note,e.replays,e.shared,e.finished_at,e.revision,e.experience" +
         sourceJoin +
-        "WHERE e.owner=? ORDER BY e.updated_at DESC,e.id",
+        "WHERE e.owner=? " +
+        mediaFilter +
+        (cursor ? "AND (e.updated_at,e.id)<(?,?) " : "") +
+        "ORDER BY e.updated_at DESC,e.id DESC" +
+        (paged ? " LIMIT 26" : ""),
     )
-    .bind(owner)
+    .bind(
+      owner,
+      ...sources.flatMap((s) => [s.provider, s.external_id]),
+      ...(cursor ?? []),
+    )
     .all<Omit<Entry, "experience"> & { experience: string | null }>();
   return results.map((e) => ({
     ...e,
@@ -165,41 +237,62 @@ export async function entries(db: D1Database, owner: string) {
       : emptyExperience,
   }));
 }
+export async function diaryPage(
+  db: D1Database,
+  owner: string,
+  cursor: Cursor | null,
+) {
+  return pageOf(await entries(db, owner, cursor, true));
+}
 export async function statistics(
   db: D1Database,
   owner: string,
   publicOnly = false,
 ): Promise<Stats> {
-  return (await db
-    .prepare(
-      `SELECT count(CASE WHEN kind='podcast' AND finished_at IS NOT NULL THEN 1 END) AS finished,
-    count(DISTINCT CASE WHEN kind='podcast' AND (status='listening' OR finished_at IS NOT NULL) THEN nullif(lower(trim(show_name)),'') END) AS shows,
-    coalesce(sum(replays),0) AS replays FROM entry WHERE owner=?` +
-        (publicOnly ? " AND shared=1" : ""),
-    )
-    .bind(owner)
-    .first<Stats>())!;
+  return (
+    (await db
+      .prepare(
+        "SELECT finished,shows,replays FROM listener_total WHERE owner=? AND public_only=?",
+      )
+      .bind(owner, Number(publicOnly))
+      .first<Stats>()) ?? { finished: 0, shows: 0, replays: 0 }
+  );
 }
-export async function publicPage(db: D1Database, username: string) {
-  const p = await db
-    .prepare(
-      "SELECT user_id," +
-        fields +
-        " FROM profile WHERE username=? AND published=1",
-    )
-    .bind(username.toLowerCase())
-    .first<Profile & { user_id: string }>();
+export async function publicPage(
+  db: D1Database,
+  username: string,
+  cursor: Cursor | null = null,
+) {
+  // A D1 batch reads profile consent, statistics and entries in one snapshot.
+  const handle = username.toLowerCase();
+  const [profile, history] = await db.batch([
+    db
+      .prepare(
+        "SELECT " +
+          fields +
+          ",coalesce(t.finished,0) AS finished,coalesce(t.shows,0) AS shows,coalesce(t.replays,0) AS replays FROM profile p LEFT JOIN listener_total t ON t.owner=p.user_id AND t.public_only=1 WHERE username=? AND published=1",
+      )
+      .bind(handle),
+    db
+      .prepare(
+        "SELECT " +
+          publicColumns +
+          ",e.id,(SELECT json_group_array(json_object('title',title,'reflection',reflection,'position_seconds',position_seconds)) FROM (SELECT title,reflection,position_seconds FROM favorite_moment WHERE entry_id=e.id AND shared=1 ORDER BY display_order)) AS moment_json" +
+          sourceJoin +
+          "JOIN profile gate ON gate.user_id=e.owner WHERE gate.published=1 AND gate.username=? AND e.shared=1 " +
+          (cursor ? "AND (e.updated_at,e.id)<(?,?) " : "") +
+          "ORDER BY e.updated_at DESC,e.id DESC LIMIT 26",
+      )
+      .bind(handle, ...(cursor ?? [])),
+  ]);
+  const p = profile.results[0] as unknown as Profile & Stats;
   if (!p) throw missing();
-  const stats = await statistics(db, p.user_id, true);
-  const { results } = await db
-    .prepare(
-      "SELECT " +
-        publicColumns +
-        sourceJoin +
-        "WHERE e.owner=? AND e.shared=1 ORDER BY e.updated_at DESC,e.id",
-    )
-    .bind(p.user_id)
-    .all<PublicEntry>();
+  const stats = p;
+  const results = history.results as unknown as (PublicEntry & {
+    id: string;
+    moment_json: string;
+  })[];
+  const page = pageOf(results);
   return {
     name: p.display_name,
     username: p.username,
@@ -212,7 +305,11 @@ export async function publicPage(db: D1Database, username: string) {
     badges: p.show_badges
       ? milestones.filter((n) => n <= stats.finished)
       : null,
-    entries: results,
+    next_cursor: page.next_cursor,
+    entries: page.entries.map(({ id: _id, moment_json, ...row }) => {
+      void _id;
+      return { ...row, moments: JSON.parse(moment_json) };
+    }),
   };
 }
 function attributes(e: Input) {
@@ -234,6 +331,31 @@ const columns =
   "kind,title,creator,show_name,artwork,status,rating,note,takeaway,shared,replays";
 export async function createEntry(db: D1Database, owner: string, e: Input) {
   const source = parseSource(e.url);
+  const fingerprint = e.import_key
+    ? Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(JSON.stringify(e)),
+          ),
+        ),
+        (b) => b.toString(16).padStart(2, "0"),
+      ).join("")
+    : null;
+  async function replay() {
+    if (!e.import_key) return null;
+    const prior = await db
+      .prepare(
+        "SELECT id,request_hash FROM entry WHERE owner=? AND provenance='manual' AND import_key=?",
+      )
+      .bind(owner, e.import_key)
+      .first<{ id: string; request_hash: string }>();
+    if (prior && prior.request_hash !== fingerprint)
+      throw conflict("This save key already identifies a different draft.");
+    return prior?.id;
+  }
+  const existing = await replay();
+  if (existing) return existing;
   if (e.replays && e.status !== "finished")
     throw new HTTPException(400, {
       message: "Finish this item before adding replays.",
@@ -257,12 +379,14 @@ export async function createEntry(db: D1Database, owner: string, e: Input) {
         .prepare(
           "INSERT INTO entry(id,owner,media_id,provider,external_id," +
             columns +
-            ",experience,finished_at,created_at,updated_at) SELECT ?,?,media_id,provider,external_id,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? FROM source WHERE provider=? AND external_id=?",
+            ",import_key,request_hash,experience,finished_at,created_at,updated_at) SELECT ?,?,media_id,provider,external_id,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? FROM source WHERE provider=? AND external_id=?",
         )
         .bind(
           id,
           owner,
           ...attributes(e),
+          e.import_key ?? null,
+          fingerprint,
           e.experience ? JSON.stringify(e.experience) : null,
           e.status === "finished" ? now : null,
           now,
@@ -272,6 +396,8 @@ export async function createEntry(db: D1Database, owner: string, e: Input) {
         ),
     ]);
   } catch (err) {
+    const retry = await replay();
+    if (retry) return retry;
     if (
       String(err).includes(
         "UNIQUE constraint failed: entry.owner, entry.media_id",

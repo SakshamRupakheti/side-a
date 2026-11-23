@@ -1,3 +1,4 @@
+import { providerJson } from "./provider-json.ts";
 import type { Env } from "./auth";
 type Source = { provider: string; external_id: string; url: string };
 export interface MediaInfo {
@@ -50,11 +51,11 @@ export async function richDetails(
       id: src.external_id,
       part: "snippet,contentDetails",
     }).toString();
-    const data = (await (
+    const data = (await providerJson(
       await get(url, {
         headers: { "X-Goog-Api-Key": env.YOUTUBE_DATA_API_KEY },
-      })
-    ).json()) as {
+      }),
+    )) as {
       items?: {
         snippet: {
           title: string;
@@ -80,7 +81,7 @@ export async function richDetails(
     env.SPOTIFY_CLIENT_ID &&
     env.SPOTIFY_CLIENT_SECRET
   ) {
-    const token = (await (
+    const token = (await providerJson(
       await get("https://accounts.spotify.com/api/token", {
         method: "POST",
         headers: {
@@ -90,13 +91,13 @@ export async function richDetails(
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: "grant_type=client_credentials",
-      })
-    ).json()) as { access_token?: string };
+      }),
+    )) as { access_token?: string };
     if (!token.access_token) return null;
     const kind = new URL(src.url).pathname.startsWith("/episode/")
       ? "episodes"
       : "audiobooks";
-    const data = (await (
+    const data = (await providerJson(
       await get(
         "https://api.spotify.com/v1/" +
           kind +
@@ -104,8 +105,8 @@ export async function richDetails(
           src.external_id +
           "?market=US",
         { headers: { Authorization: "Bearer " + token.access_token } },
-      )
-    ).json()) as {
+      ),
+    )) as {
       name: string;
       description: string;
       duration_ms?: number;
@@ -128,7 +129,11 @@ export async function richDetails(
   }
   if (
     src.provider !== "publisher" ||
-    !publisherHosts.includes(new URL(src.url).hostname)
+    !publisherHosts.includes(new URL(src.url).hostname) ||
+    (env.BETTER_AUTH_URL?.startsWith("https://") &&
+      !env.PUBLISHER_METADATA_HOSTS?.split(",")
+        .map((h) => h.trim())
+        .includes(new URL(src.url).hostname))
   )
     return null;
   const res = await get(src.url);

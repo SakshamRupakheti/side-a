@@ -22,6 +22,12 @@ import { EntryComposer } from "./EntryComposer";
 import "./style.css";
 import "./composer.css";
 
+type Collection = {
+  entries: Entry[];
+  featured: Entry[];
+  stats: Stats;
+  next_cursor: string | null;
+};
 type Dialog = "auth" | "profile" | "entry" | null;
 function App() {
   const [session, setSession] = useState<Session | null>(null),
@@ -29,13 +35,15 @@ function App() {
   const [focusNote, setFocusNote] = useState(false);
   const [saved, setSaved] = useState("");
   const saving = React.useRef(false);
+  const featuredKeys = React.useRef(new Map<string, string>());
+  function savedRecord(url: string) {
+    return (
+      diary?.entries.find((e) => e.url === url) ??
+      diary?.featured.find((e) => e.url === url)
+    );
+  }
   async function saveFeatured(d: Draft, note = false) {
-    if (
-      note ||
-      !session?.user ||
-      !session.profile ||
-      diary?.entries.some((e) => e.url === d.url)
-    ) {
+    if (note || !session?.user || !session.profile || savedRecord(d.url)) {
       add(d, note);
       return;
     }
@@ -44,7 +52,10 @@ function App() {
     setError("");
     setSaved("");
     try {
-      await api("/me/entries", "POST", d);
+      const key = featuredKeys.current.get(d.url) ?? crypto.randomUUID();
+      featuredKeys.current.set(d.url, key);
+      await api("/me/entries", "POST", { ...d, import_key: key });
+      featuredKeys.current.delete(d.url);
       await refresh();
       setSaved("Saved to your archive.");
     } catch (e) {
@@ -59,9 +70,7 @@ function App() {
   const [selected, setSelected] = useState<Entry>(),
     [draft, setDraft] = useState<Draft>(),
     [error, setError] = useState("");
-  const [diary, setDiary] = useState<{ entries: Entry[]; stats: Stats } | null>(
-      null,
-    ),
+  const [diary, setDiary] = useState<Collection | null>(null),
     [pub, setPub] = useState<PublicPage | null>(null);
   const path = location.pathname.replace(/\/$/, "") || "/",
     isPublic = path.startsWith("/u/"),
@@ -76,10 +85,11 @@ function App() {
     const s = await api<Session>("/session");
     setSession(s);
     if (s.user) {
-      const collection = !discover
-        ? await api<{ entries: Entry[]; stats: Stats }>("/me/diary")
-        : null;
-      if (collection) setDiary(collection);
+      const featured = new URLSearchParams(
+        picks.map((p) => ["featured", p.url]),
+      );
+      const collection = await api<Collection>("/me/diary?" + featured);
+      setDiary(collection);
       const pending = picks.find(
         (p) => p.art === sessionStorage.getItem("pofolio-pending"),
       );
@@ -102,21 +112,21 @@ function App() {
       if (pending) {
         setDraft(draftFromPick(pending));
         setFocusNote(sessionStorage.getItem("pofolio-note") === "yes");
-        setSelected(collection?.entries.find((e) => e.url === pending.url));
+        setSelected(collection.featured.find((e) => e.url === pending.url));
         setModal(s.profile ? "entry" : "profile");
         sessionStorage.removeItem("pofolio-pending");
         sessionStorage.removeItem("pofolio-note");
       } else if (!s.profile) setModal("profile");
     } else setDiary(null);
     return s;
-  }, [discover, isPublic, path]);
+  }, [isPublic, path]);
   useEffect(() => {
     void refresh().catch((e) => setError(message(e)));
   }, [refresh]);
   function add(d: Draft = { ...blank }, note = false) {
     setFocusNote(note);
     setSaved("");
-    const existing = diary?.entries.find((e) => d.url && e.url === d.url);
+    const existing = d.url && savedRecord(d.url);
     if (existing) {
       setSelected(existing);
       setDraft(undefined);
@@ -214,6 +224,50 @@ function App() {
     setModal(null);
     setDraft(undefined);
   }
+  function closeAccountDialog() {
+    const returnToDraft = !!draft?.import_key;
+    if (!returnToDraft) {
+      close();
+      return;
+    }
+    sessionStorage.removeItem("pofolio-compose-handoff");
+    setModal("entry");
+  }
+  const [paging, setPaging] = useState(false);
+  const cursor = isPublic ? pub?.next_cursor : diary?.next_cursor;
+  async function loadMore() {
+    if (!cursor || paging) return;
+    setPaging(true);
+    setError("");
+    try {
+      const query = "?cursor=" + encodeURIComponent(cursor);
+      if (isPublic) {
+        const page = await api<PublicPage>(
+          "/u/" + encodeURIComponent(path.slice(3)) + query,
+        );
+        setPub((current) =>
+          current && current === pub
+            ? { ...page, entries: [...current.entries, ...page.entries] }
+            : current,
+        );
+      } else {
+        const page = await api<Collection>("/me/diary" + query);
+        setDiary((current) =>
+          current && current === diary
+            ? {
+                ...page,
+                featured: current.featured,
+                entries: [...current.entries, ...page.entries],
+              }
+            : current,
+        );
+      }
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setPaging(false);
+    }
+  }
   const unknown = !(isPublic || discover || lab || path === "/");
   return (
     <>
@@ -243,7 +297,7 @@ function App() {
           <ListeningDeck
             lab={lab}
             save={saveFeatured}
-            records={diary?.entries}
+            records={diary?.featured}
           />
         )}
         {saved && (
@@ -263,7 +317,7 @@ function App() {
             !error && <p role="status">Opening profile…</p>
           )
         ) : discover ? (
-          <Discover save={add} />
+          <Discover save={add} signedIn={!!session?.user} signIn={access} />
         ) : session?.user ? (
           diary ? (
             <Journal
@@ -287,6 +341,11 @@ function App() {
             <Shelf save={add} />
           </div>
         )}
+        {cursor && !lab && !discover && (
+          <button className="button" disabled={paging} onClick={loadMore}>
+            {paging ? "Loading…" : "Load more listens"}
+          </button>
+        )}
       </main>
       <footer>
         <div className="frame footer-inner">
@@ -306,7 +365,7 @@ function App() {
             session={session}
             creating={creating}
             callbackError={callbackError}
-            close={close}
+            close={closeAccountDialog}
             done={done}
           />
         ) : (
@@ -319,7 +378,7 @@ function App() {
         <ProfileForm
           session={session}
           callbackError={callbackError}
-          close={close}
+          close={closeAccountDialog}
           done={done}
         />
       )}

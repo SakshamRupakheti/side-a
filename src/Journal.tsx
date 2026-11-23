@@ -1,3 +1,4 @@
+import { clockTime } from "../shared/experience";
 import { RecordView } from "./RecordView";
 import { SharePoster } from "./SharePoster";
 import { coverFor } from "./picks";
@@ -253,6 +254,22 @@ export function Published({ page }: { page: PublicPage }) {
               <h3>{e.title}</h3>
               <p>{[e.show_name, e.creator].filter(Boolean).join(" · ")}</p>
               {e.takeaway && <p>{e.takeaway}</p>}
+              {!!e.moments?.length && (
+                <div>
+                  <h4>Shared moments</h4>
+                  <ol>
+                    {e.moments.map((m, i) => (
+                      <li key={i}>
+                        {m.position_seconds !== null && (
+                          <small>{clockTime(m.position_seconds)} </small>
+                        )}
+                        <strong>{m.title}</strong>
+                        {m.reflection && <p>{m.reflection}</p>}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
               {e.rating && <p>Rating {e.rating}/5</p>}
               {e.url && (
                 <a

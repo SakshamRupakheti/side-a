@@ -12,6 +12,7 @@ export const statuses = {
 } as const;
 export type Status = keyof typeof statuses;
 export interface Draft {
+  import_key?: string;
   experience: Experience;
   url: string;
   title: string;
@@ -85,8 +86,15 @@ export type PublicEntry = Pick<
   | "rating"
   | "url"
   | "updated_at"
->;
+> & {
+  moments?: {
+    title: string;
+    reflection: string;
+    position_seconds: number | null;
+  }[];
+};
 export interface PublicPage {
+  next_cursor?: string | null;
   name: string;
   username: string;
   bio: string;

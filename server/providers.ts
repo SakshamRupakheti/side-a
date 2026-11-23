@@ -1,3 +1,4 @@
+import { providerJson } from "./provider-json.ts";
 import type { Env } from "./auth";
 import { richDetails, publisherHosts } from "./media-details.ts";
 import { HTTPException } from "hono/http-exception";
@@ -82,7 +83,7 @@ async function json(url: URL, headers?: Record<string, string>) {
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok) throw new Error("Provider unavailable");
-  return res.json();
+  return providerJson(res);
 }
 export async function metadata(raw: string, env: Partial<Env> = {}) {
   const src = parseSource(raw);
@@ -184,6 +185,7 @@ export async function searchShows(term: string, env: Env) {
       return {
         source: "Podcast Index",
         results: data.feeds
+          .slice(0, 12)
           .map((f) => ({
             title: f.title,
             creator: f.author,
@@ -211,6 +213,7 @@ export async function searchShows(term: string, env: Env) {
       }[];
     };
     const results: Show[] = data.results
+      .slice(0, 12)
       .map((s) => ({
         title: s.collectionName,
         creator: s.artistName,
