@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AudioLines, Headphones } from "lucide-react";
 import { api, Brand, Header, message, type Session } from "./ui";
 import { AuthForm, ProfileForm } from "./Forms";
 import { Shelf, Discover } from "./Shelf";
@@ -297,7 +296,7 @@ function App() {
             <a href="/privacy/">Privacy &amp; deletion</a>
           </div>
           <span className="footer-note">
-            <Headphones size={15} /> Podcasts · Audiobooks · Documentaries
+            Podcasts · Audiobooks · Documentaries
           </span>
         </div>
       </footer>
@@ -312,7 +311,6 @@ function App() {
           />
         ) : (
           <section className="loading" role="status">
-            <AudioLines />
             {error || "Opening sign-in…"}
             <button onClick={close}>Close</button>
           </section>

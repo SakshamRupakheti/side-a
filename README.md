@@ -1,4 +1,4 @@
-# PoFolio
+# suni.
 
 A personal listening diary for podcasts, audiobooks and documentaries. Save an episode link, record what stayed with you, and share selected entries at `/u/username`. Editors' picks link to real publisher pages. Every diary starts empty.
 

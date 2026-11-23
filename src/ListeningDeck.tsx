@@ -199,7 +199,7 @@ export function ListeningDeck({
         />
       )}
       {film && (
-        <Modal title="PoFolio short" close={() => setFilm(false)}>
+        <Modal title="suni. short" close={() => setFilm(false)}>
           <video
             className="short-film"
             controls

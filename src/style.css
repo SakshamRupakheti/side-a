@@ -886,6 +886,8 @@ footer {
 .entrance strong span + span {
   animation-name: join-right;
 }
+.entrance strong i {font-style:normal;animation: brand-period .4s 1.05s both;}
+@keyframes brand-period {from {opacity:0;color:var(--red)} 45% {opacity:1;color:var(--red)} to {opacity:1;color:var(--ink)}}
 .entrance p {
   position: absolute;
   top: calc(50% + clamp(52px, 8vw, 115px));

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 function firstVisit() {
   try {
     return (
-      !sessionStorage.getItem("pofolio-entrance") &&
+      !sessionStorage.getItem("suni-entrance") &&
       !matchMedia("(prefers-reduced-motion: reduce)").matches
     );
   } catch {
@@ -15,7 +15,7 @@ export function Entrance() {
   useEffect(() => {
     if (!open) return;
     try {
-      sessionStorage.setItem("pofolio-entrance", "seen");
+      sessionStorage.setItem("suni-entrance", "seen");
     } catch {
       /* Storage is optional. */
     }
@@ -58,11 +58,11 @@ export function Entrance() {
       }}
     >
       <div className="intro-line" />
-      <strong aria-label="PoFolio">
-        <span>Po</span>
-        <span>Folio</span>
+      <strong aria-label="suni.">
+        <span>su</span>
+        <span>ni</span><i aria-hidden="true">.</i>
       </strong>
-      <p>KEEP WHAT YOU HEARD.</p>
+      <p>Keep what you heard.</p>
       <button onClick={() => setOpen(false)}>Skip intro ↗</button>
     </div>
   ) : null;

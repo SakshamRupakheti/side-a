@@ -241,7 +241,7 @@ export function EntryComposer({
   const art = coverFor(draft);
   return (
     <Modal
-      title={entry ? "Edit your listen" : "Add to PoFolio"}
+      title={entry ? "Edit your listen" : "Add to suni."}
       close={() => {
         if (!status.busy) close();
       }}

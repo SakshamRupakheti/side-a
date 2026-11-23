@@ -1,6 +1,6 @@
 # Architecture
 
-Side A serves a Vite-built React client and a same-origin Hono API from one Cloudflare Worker. Static files and SPA deep links use Workers Static Assets. API requests use a D1 binding. Better Auth uses Drizzle's SQLite adapter. Parameterized D1 batches handle multi-table diary writes atomically. See [service limits](services.md) and the [deployment runbook](deployment.md).
+suni. serves a Vite-built React client and a same-origin Hono API from one Cloudflare Worker. Static files and SPA deep links use Workers Static Assets. API requests use a D1 binding. Better Auth uses Drizzle's SQLite adapter. Parameterized D1 batches handle multi-table diary writes atomically. See [service limits](services.md) and the [deployment runbook](deployment.md).
 
 ## Storage and ownership
 

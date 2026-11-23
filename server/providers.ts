@@ -179,7 +179,7 @@ export async function searchShows(term: string, env: Env) {
         "X-Auth-Key": env.PODCAST_INDEX_KEY,
         "X-Auth-Date": time,
         Authorization: token,
-        "User-Agent": "PoFolio-Diary/1.0",
+        "User-Agent": "suni-Diary/1.0",
       })) as { feeds: { title: string; author: string; link: string }[] };
       return {
         source: "Podcast Index",

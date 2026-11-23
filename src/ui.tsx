@@ -146,8 +146,8 @@ export function Modal({
 }
 export function Brand() {
   return (
-    <a className="brand" href="/" aria-label="PoFolio home">
-      PoFolio
+    <a className="brand" href="/" aria-label="suni. home">
+      suni.
     </a>
   );
 }

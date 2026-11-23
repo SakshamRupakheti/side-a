@@ -1,6 +1,6 @@
 # Cloudflare deployment runbook
 
-The owner needs a Cloudflare Free account and a client for each sign-in method they want to offer. Side A supports Google, Facebook and GitHub. A free workers.dev hostname is sufficient. Podcast Index credentials are optional. The GitHub Actions workflow only runs checks.
+The owner needs a Cloudflare Free account and a client for each sign-in method they want to offer. suni. supports Google, Facebook and GitHub. A free workers.dev hostname is sufficient. Podcast Index credentials are optional. The GitHub Actions workflow only runs checks.
 
 ## 1. Check the release locally
 
@@ -19,7 +19,7 @@ The origin will be `https://WORKER_NAME.ACCOUNT_SUBDOMAIN.workers.dev`. Use sepa
 
 ## 3. Supply Worker secrets
 
-For a local Google sign-in test, select the diary project in Google Auth Platform, create a **Web application** client, and register `http://127.0.0.1:8787/api/auth/callback/google` as an authorized redirect URI. Save its client ID and secret as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.dev.vars`. Restart `npm run dev`, visit `http://127.0.0.1:8787/`, and select Google. After completing consent, verify that you return to Side A signed in. Keep the downloaded client JSON outside the checkout.
+For a local Google sign-in test, select the diary project in Google Auth Platform, create a **Web application** client, and register `http://127.0.0.1:8787/api/auth/callback/google` as an authorized redirect URI. Save its client ID and secret as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.dev.vars`. Restart `npm run dev`, visit `http://127.0.0.1:8787/`, and select Google. After completing consent, verify that you return to suni. signed in. Keep the downloaded client JSON outside the checkout.
 
 Create an ignored `.env.production` containing the following names. Fill values using a password manager. Generate a distinct cryptographically random secret of at least 32 bytes. Use an HTTPS production URL and omit `LOCAL_PASSWORD_AUTH`. Local credentials and test accounts belong only to local D1.
 

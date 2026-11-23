@@ -18,7 +18,7 @@ export function SharePoster({ page }: { page: PublicPage }) {
       ctx.fillRect(68, 102, 64, 6);
       ctx.fillStyle = "#f5f2ed";
       ctx.font = '700 52px "Anybody Variable", sans-serif';
-      ctx.fillText("PoFolio", 68, 200);
+      ctx.fillText("suni.", 68, 200);
       ctx.font = '30px "IBM Plex Mono", monospace';
       ctx.fillText("PUBLIC ARCHIVE", 68, 332);
       ctx.fillStyle = "#ffd447";
@@ -59,7 +59,7 @@ export function SharePoster({ page }: { page: PublicPage }) {
       const url = URL.createObjectURL(blob),
         a = document.createElement("a");
       a.href = url;
-      a.download = "PoFolio-" + page.username + ".png";
+      a.download = "suni-" + page.username + ".png";
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMessage("Share card downloaded.");

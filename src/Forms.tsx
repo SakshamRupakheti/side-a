@@ -33,7 +33,7 @@ export function AuthForm({
     (provider) => session.methods[provider],
   );
   return (
-    <Modal title={signup ? "Start your diary" : "Welcome back"} close={close}>
+    <Modal title={signup ? "Start your suni. diary" : "Welcome back to suni."} close={close}>
       <ErrorText text={callbackError} />
       {enabled.length > 0 && (
         <div className="social">
