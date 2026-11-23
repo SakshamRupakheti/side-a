@@ -32,8 +32,8 @@ D1 Free Time Travel retains seven days. A Worker rollback changes code only. Kee
 The following pre-migration commands require approval for the named remote DB. In PowerShell, set $vault to an existing private, encrypted directory and $recipient to the verified fingerprint of the owner's GPG encryption key. GPG is an operator-side tool, not a project dependency. Use a fresh directory per snapshot. The bookmark itself belongs in the private recovery record.
 
 ~~~powershell
-npx.cmd --no-install wrangler d1 time-travel info side-a
-npx.cmd --no-install wrangler d1 export side-a --remote --output "$vault/before.sql"
+npx.cmd --no-install wrangler d1 time-travel info DB --env production
+npx.cmd --no-install wrangler d1 export DB --env production --remote --output "$vault/before.sql"
 if ($LASTEXITCODE) { throw 'Snapshot export failed' }
 gpg --output "$vault/before.sql.gpg" --encrypt --recipient $recipient "$vault/before.sql"
 if ($LASTEXITCODE) { throw 'Encryption failed' }

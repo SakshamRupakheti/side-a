@@ -28,4 +28,16 @@ The local tests run the production Hono handler, Better Auth and the checked-in 
 
 During the November 17 local checks, Spotify returned the episode title and image for its “My Path to Spotify” example. YouTube returned a title in the iframe's accessible label. suni. extracts that label server-side and renders plain text. Apple returned eight directory results for “99% Invisible.” The browser check covered the landing page, signup dialog and narrow-screen layout.
 
-Live Google, Facebook and GitHub consent callbacks, keyed Podcast Index traffic, hosted CPU usage, and production D1 migration require owner-managed accounts. Follow the deployment runbook for those checks. CI runs on GitHub after the owner publishes the repository.
+## Production smoke test, November 23, 2026
+
+The application from commit `cd40d9c` runs on [suni.](https://suni.ngo-social-studio.workers.dev) as Worker version `d8c0ae17-f4d8-4435-9d30-14a325962b64`. All 16 local tests, typecheck, lint, production asset build and Wrangler bundle checks passed. The production dependency audit reported zero known advisories.
+
+| Check | Hosted result |
+| --- | --- |
+| Authentication | Google lists the External audience as In production. Initial sign-in, sign-out and returning sign-in passed in Edge. The OAuth state cookie carried Secure, HttpOnly and SameSite=Lax. Password sign-in was disabled. |
+| Diary | First-time profile setup preserved the entry draft. A private description, reflection and timestamped moment survived a reload. The same entry returned after signing in again and appeared in the owner JSON export. |
+| Public access | Signed-out diary and export requests returned 401. The private profile returned 404. A separate synthetic profile exposed only its shared entry and selected moment. Disabling moment, entry and profile sharing removed each from the public API. The public page became unavailable after unpublishing. Cross-origin writes returned 403. |
+| Database | The new side-a D1 was empty before migration. Five migrations applied. After removing the synthetic listener, its media and moments were gone and the foreign-key check returned zero violations. The real account and private diary were retained. |
+| Cost and capacity | Workers Free and D1 Free on workers.dev cost $0/month within quotas. During the initial analytics sample Cloudflare reported 35 requests, zero Worker errors, 1,008 D1 rows read and 240 written. Worker p95 CPU of 34.15 ms exceeded the Free plan's 10 ms CPU budget. This small sign-in-heavy sample warrants investigation before increasing traffic. |
+
+Destructive account deletion and cross-account write isolation were tested against isolated D1 locally. The hosted release enables Google sign-in. Facebook, GitHub and keyed Podcast Index were outside this deployment.
