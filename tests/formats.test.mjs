@@ -113,6 +113,32 @@ test("documentary migration preserves legacy records, sources, privacy and clean
         .map((r) => r.finished),
       [1, 1],
     );
+    db.exec(
+      readFileSync(
+        new URL("../migrations/0006_collection_timeline.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    const existing = db.prepare("SELECT * FROM entry ORDER BY id").all();
+    db.exec(
+      readFileSync(
+        new URL("../migrations/0007_history_import.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    const migrated = db
+      .prepare("SELECT * FROM entry ORDER BY id")
+      .all()
+      .map(({ history_evidence, history_run, ...old }) => {
+        assert.equal(history_evidence, null);
+        assert.equal(history_run, null);
+        return { ...old };
+      });
+    assert.deepEqual(
+      migrated,
+      existing.map((row) => ({ ...row })),
+    );
+    assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
     db.exec("DELETE FROM user WHERE id='u'");
     assert.equal(db.prepare("SELECT count(*) AS n FROM media").get().n, 0);
   } finally {

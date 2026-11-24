@@ -3,11 +3,13 @@
 ## Local gate
 
 - [ ] Start from the reviewed feature branch, confirm git status and compare against bbbdddb (the local redesign). Keep the lockfile pinned. Run npm ci, npm run setup:local, npm run db:local, npm run check and npm run worker:check.
-- [ ] Review migrations 0001 through 0005, D1 row metrics and the synthetic restore result. For an existing target, record counts and restore its encrypted snapshot into a separate local state directory before applying pending migrations there. Check the same counts, private flags, PRAGMA foreign_key_check, exports and consent switches after migration. Large backfills and index rebuilds need enough daily write and storage headroom. [Recovery commands](zero-dollar-operations.md)
+- [ ] Review migrations 0001 through 0007, D1 row metrics and the synthetic restore result. For an existing target, record counts and restore its encrypted snapshot into a separate local state directory before applying pending migrations there. Check the same counts, private flags, PRAGMA foreign_key_check, exports and consent switches after migration. Large backfills and index rebuilds need enough daily write and storage headroom. [Recovery commands](zero-dollar-operations.md)
 - [ ] Confirm one card-free Cloudflare Workers Free account, its free workers.dev subdomain, the desired unique Worker name and the exact database to bind as DB. Preserve the existing database name side-a. Verify the database_id in env.production against the remote inventory.
 - [ ] Register a Google Web application client for the exact HTTPS origin, with callback /api/auth/callback/google. Select the correct consent audience and test users. Create a fresh production auth secret of at least 32 random bytes. Use a private password manager and local secret file. Configure GitHub or Facebook only after their own callbacks and consent policies are checked.
 - [ ] In an ignored .env.production set BETTER_AUTH_URL to the full HTTPS origin and supply BETTER_AUTH_SECRET, GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. Omit LOCAL_PASSWORD_AUTH, paid keys and optional rich metadata keys. Leave publisher lookups disabled unless permissions have been verified. Review app contact, published privacy text, encrypted backup retention, provider terms, and the frontend's artwork permissions for this audience.
 - [ ] Confirm the account has no paid Worker subscription, custom domain, paid observability or external billing dependency. Inspect wrangler.jsonc and check Dashboard usage across the entire account. [Cost thresholds](cost-guardrails.md)
+
+For the listening-history release, review the measured D1 batch costs, import pause switch and additive migration sequence. [History import release notes](history-import.md)
 
 ## Remote commands for explicit owner approval
 

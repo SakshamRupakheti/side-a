@@ -26,6 +26,7 @@ import { EntryComposer } from "./EntryComposer";
 import "./style.css";
 import "./composer.css";
 
+const HistoryImport = React.lazy(() => import("./HistoryImport"));
 type Collection = {
   entries: Entry[];
   featured: Entry[];
@@ -87,7 +88,8 @@ function App() {
   const path = location.pathname.replace(/\/$/, "") || "/",
     isPublic = path.startsWith("/u/"),
     discover = path === "/discover",
-    lab = path === "/swipe-lab";
+    lab = path === "/swipe-lab",
+    importing = path === "/import";
   const refresh = useCallback(async () => {
     const version = ++refreshVersion.current;
     setError("");
@@ -111,6 +113,7 @@ function App() {
       featuredKeys.current.clear();
     }
     setSession(s);
+    if (importing) return s;
     if (s.user) {
       const featured = new URLSearchParams(
         picks.map((p) => ["featured", p.url]),
@@ -151,7 +154,7 @@ function App() {
       } else if (!s.profile) setModal("profile");
     } else setDiary(null);
     return s;
-  }, [isPublic, path, lab, discover]);
+  }, [isPublic, path, lab, discover, importing]);
   useEffect(() => {
     void refresh().catch((e) => setError(message(e)));
   }, [refresh]);
@@ -356,7 +359,7 @@ function App() {
       setPaging(false);
     }
   }
-  const unknown = !(isPublic || discover || lab || path === "/");
+  const unknown = !(isPublic || discover || lab || importing || path === "/");
   return (
     <>
       <a href="#content" className="skip">
@@ -410,6 +413,25 @@ function App() {
             <h1>Page unavailable.</h1>
             <a href="/">Return to the diary</a>
           </section>
+        ) : importing ? (
+          !session ? (
+            <p role="status">Opening import…</p>
+          ) : session.user ? (
+            <React.Suspense fallback={<p role="status">Opening import…</p>}>
+              <HistoryImport
+                key={session.user.email}
+                owner={session.user.email}
+              />
+            </React.Suspense>
+          ) : (
+            <section className="pageintro">
+              <h1>Import listening history</h1>
+              <p>Sign in to import into your private collection.</p>
+              <button className="button primary" onClick={access}>
+                Sign in
+              </button>
+            </section>
+          )
         ) : lab ? null : isPublic ? (
           pub ? (
             <Published page={pub} />

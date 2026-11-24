@@ -106,6 +106,9 @@ export function Journal({
             Add a listen
           </button>
         </div>
+        <a className="plainlink history-link" href="/import">
+          Import listening history
+        </a>
         {profile?.published ? (
           <a className="plainlink" href={"/u/" + profile.username}>
             View public profile <ArrowUpRight size={15} />

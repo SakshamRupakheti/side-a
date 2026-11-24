@@ -236,6 +236,9 @@ export function ListeningDeck({
             <button className="button" onClick={personal.add}>
               Add your first listen
             </button>
+            <a href="/import" className="plainlink">
+              Import listening history
+            </a>
           </div>
         )}
         {cards.map(

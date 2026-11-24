@@ -1,3 +1,4 @@
+import { importBatch, importScope, savedIdentities } from "./history";
 import { createMiddleware } from "hono/factory";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -75,7 +76,7 @@ app.on(["POST", "GET"], "/api/auth/*", async (c) => {
     const body = z
       .object({
         provider: z.enum(socialProviders),
-        callbackURL: z.literal("/"),
+        callbackURL: z.enum(["/", "/import"]),
         disableRedirect: z.literal(true),
       })
       .strict()
@@ -168,6 +169,34 @@ app.put("/api/me/profile", async (c) => {
   await saveProfile(c.env.DB, c.get("owner"), p);
   return c.json(p);
 });
+app.get("/api/me/import/identities", async (c) => {
+  const owner = c.get("owner");
+  const page = await savedIdentities(c.env.DB, owner, c.req.query("cursor"));
+  return c.json({
+    ...page,
+    account: c.get("email"),
+    scope: await importScope(owner),
+  });
+});
+app.post("/api/me/import", async (c) => {
+  if (c.env.DISABLE_HISTORY_IMPORT === "true") {
+    return c.json(
+      {
+        error:
+          "History imports are paused. Your progress is saved on this device.",
+      },
+      423,
+    );
+  }
+  return c.json(
+    await importBatch(
+      c.env.DB,
+      c.get("owner"),
+      c.req.header("X-Suni-Import-Scope"),
+      await c.req.json(),
+    ),
+  );
+});
 app.get("/api/me/deck", async (c) => {
   const cursor = deckCursor(c.req.query("cursor"));
   const direction = z
@@ -255,7 +284,7 @@ app.get("/api/me/export", async (c) => {
     db = c.env.DB;
   const sources = await db
     .prepare(
-      "SELECT e.id AS entry_id,e.media_id,e.created_at,e.provenance,e.import_key,s.provider,s.external_id,s.url FROM entry e JOIN source s ON s.media_id=e.media_id WHERE e.owner=?",
+      "SELECT e.id AS entry_id,e.media_id,e.created_at,e.provenance,e.import_key,e.history_evidence,s.provider,s.external_id,s.url FROM entry e JOIN source s ON s.media_id=e.media_id WHERE e.owner=?",
     )
     .bind(owner)
     .all();
@@ -273,7 +302,11 @@ app.get("/api/me/export", async (c) => {
     accounts: accounts.results,
     profile: await getProfile(db, owner),
     entries: await entries(db, owner),
-    sources: sources.results,
+    sources: sources.results.map(({ history_evidence, ...source }) =>
+      history_evidence
+        ? { ...source, history_evidence: JSON.parse(String(history_evidence)) }
+        : source,
+    ),
   });
 });
 app.delete("/api/me/account", async (c) => {
@@ -288,7 +321,7 @@ app.delete("/api/me/account", async (c) => {
     await c.env.DB.prepare("DELETE FROM user WHERE id=?")
       .bind(c.get("owner"))
       .run();
-  return c.json({ deleted: true });
+  return c.json({ deleted: true, scope: await importScope(c.get("owner")) });
 });
 app.notFound((c) => c.json({ error: "Page not found." }, 404));
 app.onError((err, c) => {

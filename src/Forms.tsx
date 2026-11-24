@@ -15,7 +15,7 @@ async function startProvider(
 ) {
   const res = await api<{ url: string }>(path, "POST", {
     provider,
-    callbackURL: "/",
+    callbackURL: location.pathname === "/import" ? "/import" : "/",
     disableRedirect: true,
   });
   window.location.assign(res.url);
@@ -204,6 +204,9 @@ export function ProfileForm({
         </button>
       </form>
       <div className="account-tools">
+        <a className="plainlink" href="/import">
+          Import listening history
+        </a>
         <ErrorText text={callbackError} />
         {socialProviders
           .filter((provider) => session.methods[provider])
@@ -244,7 +247,14 @@ export function ProfileForm({
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
-              await api("/me/account", "DELETE", { confirmation: confirm });
+              const account = await api<{ scope: string }>(
+                "/me/account",
+                "DELETE",
+                { confirmation: confirm },
+              );
+              await import("./history-job")
+                .then((m) => m.localState(account.scope, "clear"))
+                .catch(() => undefined);
               signedOut();
             });
           }}

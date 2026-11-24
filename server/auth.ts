@@ -6,6 +6,7 @@ import * as schema from "./auth-schema";
 export interface Env {
   DB: D1Database;
   DISABLE_LOOKUPS?: string;
+  DISABLE_HISTORY_IMPORT?: string;
   PUBLISHER_METADATA_HOSTS?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
