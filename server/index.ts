@@ -1,9 +1,13 @@
+import { social, viewer, socialDocument } from "./social";
+import { importBatch, importScope, savedIdentities } from "./history";
+import { createMiddleware } from "hono/factory";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { auth, methods, type Env } from "./auth";
-import { metadata, searchShows } from "./providers";
+import { retryAfter } from "./throttle";
+import { metadata, searchShows, parseSource } from "./providers";
 import { socialProviders } from "../shared/sign-in";
 import {
   getProfile,
@@ -11,16 +15,21 @@ import {
   profileInput,
   entryInput,
   entries,
+  diaryPage,
+  deckPage,
+  deckCursor,
+  decodeCursor,
   statistics,
   createEntry,
   updateEntry,
   publicPage,
 } from "./diary";
 
-const app = new Hono<{
+export type AppEnv = {
   Bindings: Env;
   Variables: { owner: string; signedInAt: Date; email: string; name: string };
-}>();
+};
+const app = new Hono<AppEnv>();
 app.use("/api/*", async (c, next) => {
   c.header("Cache-Control", "private, no-store");
   c.header("X-Content-Type-Options", "nosniff");
@@ -31,14 +40,28 @@ app.use("/api/*", async (c, next) => {
     throw new HTTPException(403, {
       message: "Submit changes from the diary website.",
     });
+  if (c.req.path.startsWith("/api/u/")) {
+    const wait = retryAfter(
+      "profile:" + (c.req.header("CF-Connecting-IP") ?? "local"),
+      60,
+    );
+    if (wait) {
+      c.header("Retry-After", String(wait));
+      return c.json(
+        { error: "Please wait a moment before opening more profiles." },
+        429,
+      );
+    }
+  }
   await next();
 });
-app.use(
-  "/api/*",
+app.use("/api/*", (c, next) =>
   bodyLimit({
-    maxSize: 65536,
+    maxSize: /^\/api\/me\/entries(?:\/[^/]+)?$/.test(c.req.path)
+      ? 512 * 1024
+      : 65536,
     onError: (c) => c.json({ error: "Request is too large." }, 413),
-  }),
+  })(c, next),
 );
 app.on(["POST", "GET"], "/api/auth/*", async (c) => {
   const path = c.req.path.slice("/api/auth".length);
@@ -54,7 +77,7 @@ app.on(["POST", "GET"], "/api/auth/*", async (c) => {
     const body = z
       .object({
         provider: z.enum(socialProviders),
-        callbackURL: z.literal("/"),
+        callbackURL: z.enum(["/", "/import"]),
         disableRedirect: z.literal(true),
       })
       .strict()
@@ -78,57 +101,161 @@ app.on(["POST", "GET"], "/api/auth/*", async (c) => {
   });
 });
 app.get("/api/session", async (c) => {
-  const data = await auth(c.env).api.getSession({ headers: c.req.raw.headers });
+  const enabled = methods(c.env);
+  const data = c.req.header("cookie")
+    ? await auth(c.env).api.getSession({ headers: c.req.raw.headers })
+    : null;
+  if (!data)
+    return c.json({
+      methods: enabled,
+      linkedProviders: [],
+      user: null,
+      profile: null,
+    });
+  const [providers, profile] = await Promise.all([
+    c.env.DB.prepare("SELECT provider_id FROM account WHERE user_id=?")
+      .bind(data.user.id)
+      .all<{ provider_id: string }>(),
+    getProfile(c.env.DB, data.user.id),
+  ]);
   return c.json({
-    methods: methods(c.env),
-    linkedProviders: data
-      ? (
-          await c.env.DB.prepare(
-            "SELECT provider_id FROM account WHERE user_id = ?",
-          )
-            .bind(data.user.id)
-            .all<{ provider_id: string }>()
-        ).results.map((row) => row.provider_id)
-      : [],
-    user: data ? { name: data.user.name, email: data.user.email } : null,
-    profile: data ? await getProfile(c.env.DB, data.user.id) : null,
+    methods: enabled,
+    linkedProviders: providers.results.map((row) => row.provider_id),
+    user: { name: data.user.name, email: data.user.email },
+    profile,
   });
 });
 app.get("/api/u/:username", async (c) =>
-  c.json(await publicPage(c.env.DB, c.req.param("username"))),
+  c.json(
+    await publicPage(
+      c.env.DB,
+      c.req.param("username"),
+      decodeCursor(c.req.query("cursor")),
+      await viewer(c),
+    ),
+  ),
 );
-app.get("/api/search", async (c) => {
-  const term = z.string().trim().min(2).max(100).parse(c.req.query("q"));
-  return c.json(await searchShows(term, c.env));
-});
-app.use("/api/me/*", async (c, next) => {
+const requireSession = createMiddleware<AppEnv>(async (c, next) => {
   const data = await auth(c.env).api.getSession({ headers: c.req.raw.headers });
   if (!data)
     throw new HTTPException(401, { message: "Sign in to open your diary." });
+  const upstream = ["/api/search", "/api/me/metadata"].includes(c.req.path);
+  if (upstream && c.env.DISABLE_LOOKUPS === "true")
+    return c.json(
+      {
+        error:
+          "Directory and metadata lookups are paused. You can still save a title or source link.",
+      },
+      503,
+    );
+  const mutation = c.req.method !== "GET";
+  const wait = upstream
+    ? retryAfter("lookup:" + data.user.id, 10) ||
+      (c.req.path === "/api/search" && retryAfter("directory", 18))
+    : mutation
+      ? retryAfter("write:" + data.user.id, 180)
+      : 0;
+  if (wait) {
+    c.header("Retry-After", String(wait));
+    return c.json(
+      { error: "Too many requests. Try again in " + wait + " seconds." },
+      429,
+    );
+  }
   c.set("owner", data.user.id);
   c.set("signedInAt", data.session.createdAt);
   c.set("email", data.user.email);
   c.set("name", data.user.name);
   await next();
 });
+app.use("/api/me/*", requireSession);
+app.use("/api/search", requireSession);
+app.get("/api/search", async (c) => {
+  const term = z.string().trim().min(2).max(100).parse(c.req.query("q"));
+  return c.json(await searchShows(term, c.env));
+});
 app.put("/api/me/profile", async (c) => {
   const p = profileInput.parse(await c.req.json());
   await saveProfile(c.env.DB, c.get("owner"), p);
   return c.json(p);
 });
+app.get("/api/me/import/identities", async (c) => {
+  const owner = c.get("owner");
+  const page = await savedIdentities(c.env.DB, owner, c.req.query("cursor"));
+  return c.json({
+    ...page,
+    account: c.get("email"),
+    scope: await importScope(owner),
+  });
+});
+app.post("/api/me/import", async (c) => {
+  if (c.env.DISABLE_HISTORY_IMPORT === "true") {
+    return c.json(
+      {
+        error:
+          "History imports are paused. Your progress is saved on this device.",
+      },
+      423,
+    );
+  }
+  return c.json(
+    await importBatch(
+      c.env.DB,
+      c.get("owner"),
+      c.req.header("X-Suni-Import-Scope"),
+      await c.req.json(),
+    ),
+  );
+});
+app.get("/api/me/deck", async (c) => {
+  const cursor = deckCursor(c.req.query("cursor"));
+  const direction = z
+    .enum(["older", "newer"])
+    .default("older")
+    .parse(c.req.query("direction"));
+  return c.json(
+    await deckPage(
+      c.env.DB,
+      c.get("owner"),
+      cursor,
+      direction,
+      c.req.query("anchor"),
+    ),
+  );
+});
+app.get("/api/me/entries/:id", async (c) => {
+  const [entry] = await entries(
+    c.env.DB,
+    c.get("owner"),
+    null,
+    false,
+    [],
+    c.req.param("id"),
+  );
+  if (!entry)
+    throw new HTTPException(404, { message: "This record is unavailable." });
+  return c.json(entry);
+});
 app.get("/api/me/diary", async (c) => {
   const owner = c.get("owner");
-  const [items, stats] = await Promise.all([
-    entries(c.env.DB, owner),
+  // The stage still offers Edit for saved shelf picks beyond the first archive page.
+  const featured = z
+    .array(z.string().min(1).max(2048))
+    .max(8)
+    .parse(c.req.queries("featured") ?? [])
+    .map(parseSource);
+  const [items, stats, shelf] = await Promise.all([
+    diaryPage(c.env.DB, owner, decodeCursor(c.req.query("cursor"))),
     statistics(c.env.DB, owner),
+    featured.length ? entries(c.env.DB, owner, null, true, featured) : [],
   ]);
-  return c.json({ entries: items, stats });
+  return c.json({ ...items, stats, featured: shelf });
 });
 app.post("/api/me/metadata", async (c) => {
   const { url } = z
     .object({ url: z.string().min(1).max(2048) })
     .parse(await c.req.json());
-  return c.json(await metadata(url));
+  return c.json(await metadata(url, c.env));
 });
 app.post("/api/me/entries", async (c) => {
   const e = entryInput.parse(await c.req.json());
@@ -167,7 +294,7 @@ app.get("/api/me/export", async (c) => {
     db = c.env.DB;
   const sources = await db
     .prepare(
-      "SELECT e.id AS entry_id,e.media_id,e.created_at,e.provenance,e.import_key,s.provider,s.external_id,s.url FROM entry e JOIN source s ON s.media_id=e.media_id WHERE e.owner=?",
+      "SELECT e.id AS entry_id,e.media_id,e.created_at,e.provenance,e.import_key,e.history_evidence,s.provider,s.external_id,s.url FROM entry e JOIN source s ON s.media_id=e.media_id WHERE e.owner=?",
     )
     .bind(owner)
     .all();
@@ -177,15 +304,48 @@ app.get("/api/me/export", async (c) => {
     )
     .bind(owner)
     .all();
-  c.header("Content-Disposition", 'attachment; filename="side-a-diary.json"');
+  const socialData = await db.batch([
+    db
+      .prepare(
+        "SELECT id,entry_id,caption,published,published_at,include_takeaway,include_moments,revision FROM social_post WHERE owner=?",
+      )
+      .bind(owner),
+    db.prepare("SELECT post FROM social_bookmark WHERE actor=?").bind(owner),
+    db.prepare("SELECT post FROM social_like WHERE actor=?").bind(owner),
+    db
+      .prepare(
+        "SELECT username FROM social_follow f JOIN profile p ON p.user_id=f.followed WHERE f.follower=?",
+      )
+      .bind(owner),
+    db
+      .prepare(
+        "SELECT username FROM social_block b JOIN profile p ON p.user_id=b.blocked WHERE b.blocker=?",
+      )
+      .bind(owner),
+    db
+      .prepare(
+        "SELECT r.id,r.post,p.username AS reported_profile,r.reason,r.status,r.created_at FROM social_report r LEFT JOIN profile p ON p.user_id=r.person WHERE r.reporter=?",
+      )
+      .bind(owner),
+  ]);
+  c.header("Content-Disposition", 'attachment; filename="suni-diary.json"');
   return c.json({
     version: 1,
+    social: Object.fromEntries(
+      ["posts", "bookmarks", "likes", "following", "blocked", "reports"].map(
+        (k, i) => [k, socialData[i].results],
+      ),
+    ),
     exported_at: new Date().toISOString(),
     user: { name: c.get("name"), email: c.get("email") },
     accounts: accounts.results,
     profile: await getProfile(db, owner),
     entries: await entries(db, owner),
-    sources: sources.results,
+    sources: sources.results.map(({ history_evidence, ...source }) =>
+      history_evidence
+        ? { ...source, history_evidence: JSON.parse(String(history_evidence)) }
+        : source,
+    ),
   });
 });
 app.delete("/api/me/account", async (c) => {
@@ -200,8 +360,10 @@ app.delete("/api/me/account", async (c) => {
     await c.env.DB.prepare("DELETE FROM user WHERE id=?")
       .bind(c.get("owner"))
       .run();
-  return c.json({ deleted: true });
+  return c.json({ deleted: true, scope: await importScope(c.get("owner")) });
 });
+app.route("/api", social);
+app.get("/p/:id", socialDocument);
 app.notFound((c) => c.json({ error: "Page not found." }, 404));
 app.onError((err, c) => {
   if (err instanceof HTTPException)
@@ -217,6 +379,19 @@ app.onError((err, c) => {
     );
   if (err instanceof SyntaxError)
     return c.json({ error: "Invalid JSON request." }, 400);
+  if (
+    /D1.*(?:quota|limit exceeded|exceeded.{0,100}limit|daily.{0,60}limit|storage.{0,40}limit|overload|too many requests|temporarily unavailable)/i.test(
+      String(err),
+    )
+  ) {
+    c.header("Retry-After", "60");
+    return c.json(
+      {
+        error: "The diary is temporarily at capacity. Please try again later.",
+      },
+      503,
+    );
+  }
   console.error("Request failed", c.req.method, c.req.routePath, err.name);
   return c.json(
     { error: "The diary could not complete this request. Please try again." },

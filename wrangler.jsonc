@@ -3,10 +3,12 @@
   "main": "server/index.ts",
   "compatibility_date": "2026-05-01",
   "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": false },
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"],
+    "run_worker_first": ["/api/*","/p/*"],
   },
   "d1_databases": [
     {
@@ -16,4 +18,20 @@
       "migrations_dir": "migrations",
     },
   ],
+  "env": {
+    "production": {
+      "name": "suni",
+      "account_id": "9b7f1994b7c8b773698af29212d85c77",
+      "workers_dev": true,
+      "preview_urls": false,
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "side-a",
+          "database_id": "ef1a1e2b-8007-4ad0-8549-55ca0bf49dd5",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+  },
 }

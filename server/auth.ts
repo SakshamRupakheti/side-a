@@ -5,6 +5,11 @@ import * as schema from "./auth-schema";
 
 export interface Env {
   DB: D1Database;
+  ASSETS: Fetcher;
+  SOCIAL_READ_LIMIT?: string;
+  DISABLE_LOOKUPS?: string;
+  DISABLE_HISTORY_IMPORT?: string;
+  PUBLISHER_METADATA_HOSTS?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   LOCAL_PASSWORD_AUTH?: string;
@@ -16,6 +21,9 @@ export interface Env {
   FACEBOOK_CLIENT_SECRET?: string;
   PODCAST_INDEX_KEY?: string;
   PODCAST_INDEX_SECRET?: string;
+  YOUTUBE_DATA_API_KEY?: string;
+  SPOTIFY_CLIENT_ID?: string;
+  SPOTIFY_CLIENT_SECRET?: string;
 }
 export function methods(env: Env) {
   const url = new URL(env.BETTER_AUTH_URL);
@@ -33,6 +41,9 @@ function buildAuth(env: Env) {
   const enabled = methods(env);
   return betterAuth({
     baseURL: env.BETTER_AUTH_URL,
+    trustedOrigins: [new URL(env.BETTER_AUTH_URL).origin],
+    session: { expiresIn: 7 * 24 * 60 * 60, cookieCache: { enabled: false } },
+    logger: { disabled: true },
     secret: env.BETTER_AUTH_SECRET,
     onAPIError: { errorURL: new URL("/?signin", env.BETTER_AUTH_URL).href },
     database: drizzleAdapter(drizzle(env.DB), { provider: "sqlite", schema }),

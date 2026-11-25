@@ -1,0 +1,131 @@
+.history-page {
+  max-width: 58rem;
+  margin-inline: auto;
+  padding-bottom: 3rem;
+}
+.history-page h1 {
+  max-width: 15ch;
+}
+.history-page h1 span,
+.history-steps [aria-current] {
+  color: var(--gold);
+}
+.history-steps {
+  display: flex;
+  gap: 1.75rem;
+  padding: 0 0 0.85rem;
+  list-style: none;
+  border-bottom: 1px solid var(--rule);
+  font: 12px var(--mono);
+  color: var(--soft);
+}
+.history-panel,
+.history-options {
+  padding: 1.4rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.history-page h2 {
+  font-family: var(--display);
+  margin: 0.25rem 0 0.75rem;
+}
+.history-page p {
+  max-width: 67ch;
+  margin: 0.8rem 0;
+}
+.history-page small {
+  display: block;
+  color: var(--soft);
+}
+.history-file,
+.history-fields label {
+  display: grid;
+  gap: 0.4rem;
+}
+.history-file {
+  margin: 1.2rem 0 0.6rem;
+}
+.history-file input {
+  width: 100%;
+  padding: 0.8rem;
+  background: var(--carbon);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+.history-file input::file-selector-button {
+  background: var(--gold);
+  color: var(--void);
+  border: 0;
+  padding: 0.6rem 0.85rem;
+  margin-right: 0.8rem;
+  border-radius: 5px;
+  font: inherit;
+  font-weight: bold;
+}
+.history-counts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 1.4rem 0;
+  gap: 1rem;
+}
+.history-counts strong {
+  font: 600 2rem var(--display);
+}
+.history-options summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.history-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.history-fields input,
+.history-fields select {
+  width: 100%;
+  min-width: 0;
+}
+.history-rows {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+.history-rows li {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--rule);
+  overflow-wrap: anywhere;
+}
+.history-rows input,
+.history-check input {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+  accent-color: var(--gold);
+}
+.history-check,
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.history-page progress {
+  width: 100%;
+  accent-color: var(--gold);
+}
+.history-link {
+  margin: 0 1.25rem 0.75rem 0;
+}
+@media (max-width: 650px) {
+  .history-fields,
+  .history-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .history-page h1 {
+    font-size: clamp(2.45rem, 10vw, 4rem);
+  }
+}

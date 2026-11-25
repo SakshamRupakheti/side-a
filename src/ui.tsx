@@ -1,5 +1,11 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { X, AudioLines, ArrowUpRight, BookOpen, Compass } from "lucide-react";
+import {
+  useLayoutEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { X, ArrowUpRight, BookOpen, Compass, Plus } from "lucide-react";
 import type { Profile } from "../shared/diary";
 import type { SocialProvider } from "../shared/sign-in";
 
@@ -74,21 +80,60 @@ export function ErrorText({ text }: { text: string }) {
 export function Modal({
   title,
   children,
+  cinematic = false,
   close,
 }: {
   title: string;
   children: ReactNode;
+  cinematic?: boolean;
   close: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null),
     id = useId();
-  useEffect(() => {
+  useLayoutEffect(() => {
     const d = ref.current!;
+    const trigger =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const start = trigger?.getBoundingClientRect();
     d.showModal();
-    return () => d.close();
-  }, []);
+    let animation: Animation | undefined;
+    if (
+      cinematic &&
+      start &&
+      trigger !== document.body &&
+      !matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      const end = d.getBoundingClientRect();
+      const dx = start.left + start.width / 2 - end.left - end.width / 2;
+      const dy = start.top + start.height / 2 - end.top - end.height / 2;
+      animation = d.animate(
+        [
+          {
+            opacity: 0,
+            transform: "translate(" + dx + "px," + dy + "px) scale(.12)",
+          },
+          { opacity: 1, transform: "none" },
+        ],
+        { duration: 260, easing: "cubic-bezier(.2,.8,.25,1)" },
+      );
+    }
+    return () => {
+      animation?.cancel();
+      d.close();
+    };
+  }, [cinematic]);
   return (
-    <dialog ref={ref} aria-labelledby={id} onCancel={close}>
+    <dialog
+      ref={ref}
+      className={cinematic ? "composer" : undefined}
+      aria-labelledby={id}
+      onCancel={(e) => {
+        e.preventDefault();
+        close();
+      }}
+    >
       <div className="modal-head">
         <h2 id={id}>{title}</h2>
         <button className="icon" onClick={close} aria-label="Close dialog">
@@ -101,21 +146,20 @@ export function Modal({
 }
 export function Brand() {
   return (
-    <a className="brand" href="/" aria-label="Side A home">
-      <span className="brandmark">
-        <AudioLines strokeWidth={2.3} />
-      </span>
-      Side A<span className="brand-dot">.</span>
+    <a className="brand" href="/" aria-label="suni. home">
+      suni.
     </a>
   );
 }
 export function Header({
   session,
   open,
+  add,
   active,
 }: {
   session: Session | null;
   open: () => void;
+  add: () => void;
   active: string;
 }) {
   return (
@@ -123,15 +167,24 @@ export function Header({
       <div className="frame top">
         <Brand />
         <nav aria-label="Main">
-          <a className={active === "diary" ? "current" : ""} href="/">
-            <BookOpen /> Diary
+          <a
+            className={active === "diary" ? "current" : ""}
+            href={session?.user ? "/#archive" : "/?signin"}
+          >
+            <BookOpen /> My Archive
           </a>
           <a
             className={active === "discover" ? "current" : ""}
             href="/discover"
           >
-            <Compass /> Discover
+            <Compass /> Explore
           </a>
+          <button className="nav-add" onClick={add} aria-label="Add a listen">
+            <span className="nav-add-surface">
+              <Plus size={15} aria-hidden="true" />
+              Add
+            </span>
+          </button>
         </nav>
         <button className="button top-action" onClick={open}>
           {session?.user ? "Profile settings" : "Sign in"}

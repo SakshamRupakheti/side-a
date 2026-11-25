@@ -1,6 +1,6 @@
-# Side A
+# suni.
 
-A personal listening diary for podcasts and audiobooks. Save an episode link, record what stayed with you, and share selected entries at `/u/username`. Editors' picks link to real publisher pages. Every diary starts empty.
+A personal listening diary for podcasts, audiobooks and documentaries. Save an episode link, record what stayed with you, and share selected entries at `/u/username`. Editors' picks link to real publisher pages. Every diary starts empty.
 
 ## Run locally
 
@@ -13,12 +13,14 @@ npm run db:local
 npm run dev
 ```
 
-Open **http://127.0.0.1:8787**. Choose **Start your diary** to create a local account and select a username. The setup script generates a fresh secret in ignored `.dev.vars`. Local data persists under `.wrangler/state`. Rebuild with `npm run build` after changing client files. Wrangler watches Worker code.
+Open **http://127.0.0.1:8787**. Choose **Sign in** and **Create a new diary** to create a local account and select a username. The setup script generates a fresh secret in ignored `.dev.vars`. Local data persists under `.wrangler/state`. Rebuild with `npm run build` after changing client files. Wrangler watches Worker code.
 
 ## Use the diary
 
-1. Choose **Log a listen**. Paste a Spotify episode or YouTube video link to retrieve its available metadata. A publisher URL or a manually entered title also works.
-2. Choose a format and status. Private notes stay in the owner view. A public takeaway is visible after the listener shares the entry and publishes the profile.
+Open the [local swipe lab](http://127.0.0.1:8787/swipe-lab) to try the homepage carousel with adjustable sensitivity, momentum and damping. Each release reports launch speed, distance from the release point and elapsed time. Lab adjustments apply to the current lab visit.
+
+1. Choose **Add a listen** and save a title, or paste a source link and select **Import details**. Review the cover, creator, category, original description and duration. You can supply any missing details.
+2. Use **Reflection** to describe the listen in your own words and record what stayed with you. **Moments** accepts optional timestamps in HH:MM:SS. Open the saved title in your archive to revisit it. Personal descriptions, reflections and notes are private. Each moment has a separate sharing control and requires a shared entry and a published profile to appear publicly. A public takeaway appears when you share the entry and publish your profile.
 3. Mark a podcast episode finished to count it toward milestones. Record additional full listens in the replay field. The same provider item can occur once per listener.
 4. Use **Profile settings** to publish the profile, select individual statistics and badges, export JSON, or delete the account. Sign in again if deletion requires a fresh session.
 
@@ -42,9 +44,9 @@ npm run check
 npm run worker:check
 ```
 
-The first command type-checks, lints, builds the client and exercises a temporary D1 database. The second produces a local Worker bundle and reports its compressed size. See the [verification record](docs/verification.md), [architecture and schema](docs/architecture.md), [service limits and official references](docs/services.md), and [Cloudflare deployment runbook](docs/deployment.md).
+The first command type-checks, lints, builds the client and exercises a temporary D1 database. The second produces a local Worker bundle and reports its compressed size. See the [verification record](docs/verification.md), [architecture and schema](docs/architecture.md), [service limits and official references](docs/services.md), and [Cloudflare deployment runbook](docs/deployment.md). The [launch checklist](docs/launch-checklist.md) includes the approval gates, [encrypted backup procedure](docs/zero-dollar-operations.md) and [cost guardrails](docs/cost-guardrails.md).
 
 ## License
 
-Application source and original visuals are available under the [MIT license](LICENSE). Third-party packages retain their own licenses. Instrument Serif and DM Sans use the SIL Open Font License. Podcast names and editorial links identify their respective publishers.
+Application source and original visuals are available under the [MIT license](LICENSE). Third-party packages retain their own licenses. Anybody, DM Sans and IBM Plex Mono use the SIL Open Font License. Podcast names and editorial links identify their respective publishers.
 

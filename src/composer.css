@@ -1,0 +1,358 @@
+.nav-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 9px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.nav-add-surface {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding-inline: 10px;
+  border-radius: inherit;
+  background: #17171b;
+}
+.nav-add svg {
+  display: block;
+  flex: none;
+  border-radius: 3px;
+  background: var(--gold);
+  color: #000;
+}
+@media (hover: hover) {
+  .nav-add:hover .nav-add-surface {
+    background: #222227;
+  }
+}
+.nav-add:active .nav-add-surface {
+  background: #1c1c20;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nav-add svg {
+    transition: transform 100ms ease-out;
+  }
+  .nav-add:active svg {
+    transform: scale(0.94);
+  }
+}
+dialog.composer {
+  background:
+    radial-gradient(ellipse at 85% 0%, #371d24 0, transparent 42%), #141216;
+  border: 1px solid #68404a;
+  width: min(620px, calc(100% - 24px));
+  padding: clamp(18px, 4vw, 36px);
+  border-radius: 18px;
+  animation: none;
+  overscroll-behavior: contain;
+  scrollbar-color: #6b4851 #171518;
+}
+dialog.composer::backdrop {
+  background: #08070be8;
+}
+.composer .modal-head {
+  margin-bottom: 20px;
+}
+.composer .modal-head h2 {
+  font-size: clamp(28px, 5vw, 43px);
+  letter-spacing: -0.055em;
+}
+.composer-steps {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #53353a;
+  margin-bottom: 20px;
+}
+.composer-steps button {
+  color: #c4b3b4;
+  padding: 10px 13px;
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-weight: 700;
+}
+.composer-steps button[aria-current="step"] {
+  border-color: #ff6555;
+  color: #fff2d6;
+}
+.composer-page,
+.composer-disclosure > div,
+.record-detail {
+  display: grid;
+  gap: 15px;
+  min-width: 0;
+}
+.composer-page > label:first-child:has(+ .import-row) {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: -12px;
+}
+.composer small,
+.record-detail small {
+  display: block;
+  color: #c4b6b9;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.composer label > small {
+  margin-top: 3px;
+}
+.import-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.import-row input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.import-row button {
+  font-size: 13px;
+  padding: 7px 11px;
+}
+.listen-preview {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  border-block: 1px solid #463136;
+  padding: 14px 0;
+}
+.listen-cover {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  color: #f6b786;
+  border: 1px solid #89463c;
+  border-radius: 8px;
+  background: radial-gradient(at 20% 0, #a73b39, transparent 65%), #3a2228;
+}
+.listen-cover img {
+  border-radius: inherit;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.listen-preview > div + div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.listen-preview strong {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.listen-preview small,
+.record-detail li small {
+  color: #efbd74;
+  font-family: "IBM Plex Mono", monospace;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.listen-preview span {
+  color: #c4b6b9;
+}
+.composer :is(input, textarea, select):focus-visible {
+  outline: 2px solid #ff8876;
+  outline-offset: 1px;
+  box-shadow: 0 0 18px #d338361a;
+}
+.composer-disclosure {
+  border-top: 1px solid #49363b;
+  padding-top: 4px;
+}
+.composer summary,
+.record-detail summary {
+  cursor: pointer;
+  color: #e2cfd1;
+  line-height: 1.5;
+  padding: 9px 0;
+  font-weight: 700;
+}
+.composer summary svg {
+  vertical-align: middle;
+  margin-right: 3px;
+}
+.composer-disclosure[open] > div {
+  padding: 8px 0;
+}
+.composer .reflection-panel,
+.record-reflection {
+  background:
+    radial-gradient(ellipse at 0 0, #642c32 0, transparent 72%), #21191d;
+  border: 1px solid #734049;
+  border-radius: 12px;
+  padding: clamp(16px, 4vw, 29px);
+}
+.reflection-panel > label {
+  display: block;
+  font-family: var(--display);
+  letter-spacing: -0.055em;
+  text-transform: uppercase;
+  font-size: clamp(28px, 5.5vw, 48px);
+  font-weight: 710;
+  line-height: 1.02;
+  color: #ffe4bf;
+  max-width: 17ch;
+}
+.reflection-panel textarea {
+  margin: 16px 0 9px;
+  min-height: 123px;
+  background: #1a1317;
+  border-color: #7d4d52;
+}
+.reflection-panel small svg {
+  vertical-align: middle;
+}
+.composer .moment {
+  display: grid;
+  gap: 10px;
+  border-color: #594046;
+  border-radius: 8px;
+}
+.moment legend {
+  color: #f3c48e;
+  padding: 0 6px;
+}
+.moment .plainlink,
+.moment-add {
+  justify-self: start;
+}
+.composer-page h3,
+.composer-page p,
+.record-detail h3,
+.record-detail p {
+  margin: 0;
+}
+.composer-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #50373d;
+  padding: 14px 0 0;
+}
+.composer-actions .primary {
+  border-radius: 22px;
+}
+.record-title {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+.record-title:hover {
+  text-decoration: underline;
+}
+.record-detail {
+  overflow-wrap: anywhere;
+}
+.record-detail p {
+  white-space: pre-wrap;
+}
+.record-detail section {
+  display: grid;
+  gap: 8px;
+}
+.record-cover {
+  width: min(180px, 100%);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 9px;
+}
+.record-byline {
+  font-weight: 700;
+}
+.record-detail .plainlink,
+.record-detail .button {
+  justify-self: start;
+}
+.record-detail ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.record-detail li {
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid var(--rule);
+  padding: 10px 0;
+}
+@media (max-width: 700px) {
+  .top,
+  .top nav {
+    gap: 8px;
+  }
+  .top .brand {
+    flex-shrink: 0;
+  }
+  .top .top-action {
+    flex-shrink: 0;
+  }
+}
+@media (max-width: 560px) {
+  .nav-add {
+    font-size: 12px;
+  }
+  .nav-add-surface {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+}
+@media (max-width: 420px) {
+  .top {
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+  .top nav {
+    gap: 7px;
+  }
+  .top .top-action {
+    padding: 5px 7px;
+  }
+  .composer .pair {
+    gap: 8px;
+  }
+  .import-row {
+    flex-wrap: wrap;
+  }
+  .import-row input {
+    flex-basis: 180px;
+  }
+  .composer input,
+  .composer select {
+    max-width: 100%;
+  }
+  .composer-steps button {
+    padding-inline: 10px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .composer-page {
+    animation: composer-page-in 0.16s ease-out;
+  }
+  @keyframes composer-page-in {
+    from {
+      opacity: 0.65;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

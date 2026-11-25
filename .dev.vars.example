@@ -10,4 +10,12 @@ FACEBOOK_CLIENT_ID=
 FACEBOOK_CLIENT_SECRET=
 PODCAST_INDEX_KEY=
 PODCAST_INDEX_SECRET=
+# Set true to pause search and provider requests while keeping manual saves available.
+DISABLE_LOOKUPS=false
+# Hosted publisher lookups require verified permission and an existing supported hostname.
+PUBLISHER_METADATA_HOSTS=
+# Leave rich API credentials empty on the zero-dollar launch. Basic Spotify and YouTube imports work without these.
+YOUTUBE_DATA_API_KEY=
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
 

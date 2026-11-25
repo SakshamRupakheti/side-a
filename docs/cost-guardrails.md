@@ -1,0 +1,28 @@
+# Cost guardrails
+
+Reviewed 23 November 2026. This release assumes an account enrolled in Workers Free, a workers.dev hostname and a single D1 Free database. Check the dashboard account and subscription before enabling anything. Stop if a signup asks for a payment method or subscription. No operator may enable Workers Paid without explicit owner approval.
+
+| Dependency | Launch configuration and budget |
+|---|---|
+| Workers, workers.dev, Static Assets | 100,000 dynamic requests per UTC day, 10 ms CPU per invocation. Direct static requests are free. Only /api/* runs the Worker first. The Free offering requires no card. CPU or request exhaustion can produce a platform error before application code runs. [Workers](https://www.cloudflare.com/products/workers/) · [Limits](https://developers.cloudflare.com/workers/platform/limits/) · [Pricing](https://developers.cloudflare.com/workers/platform/pricing/) |
+| D1 | 5 million rows read and 100,000 written daily across the account. Storage is 500 MB per DB and 5 GB across the account. Index maintenance, auth writes, child rows and statistics counters consume writes. Free quotas reject additional work. [Pricing](https://developers.cloudflare.com/d1/platform/pricing/) · [Limits](https://developers.cloudflare.com/d1/platform/limits/) |
+| OAuth | Google identity with basic profile/email scopes. Existing GitHub and Facebook adapters only activate with complete credential pairs. Launch needs one client. No email delivery, SMS, payment method or paid API is part of the app flow. Provider approval, audience restrictions, verification and regional account requirements must be checked with the actual account. [Google OAuth](https://developers.google.com/identity/protocols/oauth2/web-server) · [Existing provider setup](deployment.md) |
+| Spotify and YouTube | Keyless oEmbed lookups only at baseline. No audio, synchronization or purchased API quota. Public numeric allowances and availability are uncertain. Unavailable metadata leaves an editable manual entry. Keep rich API credentials empty unless rights, account eligibility and a permanent card-free allowance have been verified. [Spotify oEmbed](https://developer.spotify.com/documentation/embeds/reference/oembed) · [YouTube oEmbed](https://oembed.com/#section5.1) |
+| Podcast Index and Apple | Podcast Index accepts free issued credentials. Apple's directory fallback requires no key and describes approximately 20 calls/minute, subject to change. Show results link to the provider with service attribution. No preview downloads or shared result cache. Registration availability and future terms are external. [Podcast Index](https://api.podcastindex.org/) · [Apple terms](https://performance-partners.apple.com/search-api) |
+| Publisher metadata and third-party artwork | Hosted publisher metadata import is opt-in by supported hostname after permission review. Opening external links or loading provider artwork contacts the publisher in the browser. No R2, rehosting, scraping jobs or media proxy. |
+| Monitoring | Built-in usage and D1 row metrics. Worker observability is explicitly disabled. Current Workers Logs Free allowance is 200,000 events/day with 3-day retention. Recheck the December 1, 2026 observability billing transition before enabling ingestion. Keep Log Explorer off. [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/) |
+| CI and libraries | Existing public repository uses a standard GitHub-hosted runner for checks. Can run entirely locally. Better Auth, Hono, Drizzle and bundled fonts run inside the existing app. No hosted auth contract or new dependencies. [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions) |
+
+## Operating thresholds
+
+| Threshold | Requests/day | Rows read/day | Rows written/day | DB / account storage | Action |
+|---|---:|---:|---:|---|---|
+| 50% | 50,000 | 2,500,000 | 50,000 | 250 MB / 2.5 GB | Record usage and time of day. Compare it to active sessions, entry writes and public traffic. |
+| 75% | 75,000 | 3,750,000 | 75,000 | 375 MB / 3.75 GB | Pause optional lookups with DISABLE_LOOKUPS=true. Inspect D1 row metrics and indexed query plans. |
+| 90% | 90,000 | 4,500,000 | 90,000 | 450 MB / 4.5 GB | Pause new-user promotion and nonessential jobs. Reserve capacity for saves, export and deletion. Delay migrations until headroom returns. |
+| Cap | 100,000 | 5,000,000 | 100,000 | 500 MB / 5 GB | Daily headroom returns after reset. Storage requires deliberate cleanup or archival. Keep drafts open and retry. No automatic upgrade. |
+
+Monitor p95 CPU against 5, 7.5 and 9 ms. Local wall time does not measure hosted invocation CPU. Worker or D1 platform enforcement can prevent a custom response. Application throttles return 429 with Retry-After. Recognized D1 capacity failures return 503. Archive pages use bounded reads and precomputed statistics. Full user exports and migrations are heavier operations.
+
+The Workers Rate Limiting binding is generally available and approximate per location. Published binding documentation did not establish entitlement for this particular Free account. This release uses a bounded per-isolate fallback with at most 4,096 keys per minute and zero limiter writes to D1. Cold starts, multiple isolates and regions can admit more requests than the configured limit. The directory cap of 18/minute per isolate is advisory across the service. Watch upstream 429s and pause lookups if necessary. Better Auth retains its database-backed sign-in limiter. [Binding behavior](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
+

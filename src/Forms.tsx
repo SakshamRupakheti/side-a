@@ -1,19 +1,12 @@
-import { useRef, useState } from "react";
-import { ArrowRight, Link2, LockKeyhole } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { api, ErrorText, Modal, type Session, useAction } from "./ui";
 import {
   socialProviders,
   providerNames,
   type SocialProvider,
 } from "../shared/sign-in";
-import {
-  blank,
-  emptyProfile,
-  statuses,
-  type Draft,
-  type Entry,
-  type Profile,
-} from "../shared/diary";
+import { emptyProfile, type Profile } from "../shared/diary";
 
 type FormProps = { close: () => void; done: () => Promise<void> };
 async function startProvider(
@@ -22,7 +15,7 @@ async function startProvider(
 ) {
   const res = await api<{ url: string }>(path, "POST", {
     provider,
-    callbackURL: "/",
+    callbackURL: location.pathname === "/import" ? "/import" : "/",
     disableRedirect: true,
   });
   window.location.assign(res.url);
@@ -40,7 +33,10 @@ export function AuthForm({
     (provider) => session.methods[provider],
   );
   return (
-    <Modal title={signup ? "Start your diary" : "Welcome back"} close={close}>
+    <Modal
+      title={signup ? "Start your suni. diary" : "Welcome back to suni."}
+      close={close}
+    >
       <ErrorText text={callbackError} />
       {enabled.length > 0 && (
         <div className="social">
@@ -123,7 +119,12 @@ export function ProfileForm({
   callbackError,
   close,
   done,
-}: { session: Session; callbackError: string } & FormProps) {
+  signedOut,
+}: {
+  signedOut: () => void;
+  session: Session;
+  callbackError: string;
+} & FormProps) {
   const [p, set] = useState<Profile>(
     session.profile || {
       ...emptyProfile,
@@ -139,6 +140,7 @@ export function ProfileForm({
     show_shows: "Shows explored",
     show_replays: "Replay count",
     show_badges: "Milestone badges",
+    leaderboard_opt_in: "Rank my published profile on the Listening Wall",
   } as const;
   return (
     <Modal
@@ -196,13 +198,20 @@ export function ProfileForm({
               {switches[k]}
             </label>
           ))}
-          <small>Public statistics and badges count shared entries only.</small>
+          <small>
+            Wall rank uses sharing badges earned from your published podcast
+            postcards. You can leave the ranking at any time. Published
+            postcards still appear in Fresh Voices.
+          </small>
         </fieldset>
         <button className="button primary" disabled={act.busy}>
           Save profile
         </button>
       </form>
       <div className="account-tools">
+        <a className="plainlink" href="/import">
+          Import listening history
+        </a>
         <ErrorText text={callbackError} />
         {socialProviders
           .filter((provider) => session.methods[provider])
@@ -230,7 +239,7 @@ export function ProfileForm({
           onClick={() =>
             void act.run(async () => {
               await api("/auth/sign-out", "POST", {});
-              await done();
+              signedOut();
             })
           }
         >
@@ -243,8 +252,15 @@ export function ProfileForm({
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
-              await api("/me/account", "DELETE", { confirmation: confirm });
-              await done();
+              const account = await api<{ scope: string }>(
+                "/me/account",
+                "DELETE",
+                { confirmation: confirm },
+              );
+              await import("./history-job")
+                .then((m) => m.localState(account.scope, "clear"))
+                .catch(() => undefined);
+              signedOut();
             });
           }}
         >
@@ -262,262 +278,6 @@ export function ProfileForm({
             Permanently delete account
           </button>
         </form>
-      )}
-      <ErrorText text={act.error} />
-    </Modal>
-  );
-}
-export function EntryForm({
-  entry,
-  initial,
-  close,
-  done,
-}: { entry?: Entry; initial?: Draft } & FormProps) {
-  const [v, set] = useState<Draft>(entry || initial || { ...blank }),
-    [hint, setHint] = useState(""),
-    [loading, setLoading] = useState(false),
-    [deleting, setDeleting] = useState(false);
-  const lookupId = useRef(0),
-    last = useRef(""),
-    act = useAction();
-  function change<K extends keyof Draft>(key: K, value: Draft[K]) {
-    set((prev) => ({ ...prev, [key]: value }));
-  }
-  async function lookup(raw: string) {
-    raw = raw.trim();
-    if (entry || !raw || raw === last.current) return;
-    const id = ++lookupId.current;
-    last.current = raw;
-    setLoading(true);
-    setHint("");
-    try {
-      const result = await api<{
-        url: string;
-        title: string;
-        creator: string;
-        artwork: string;
-        available: boolean;
-      }>("/me/metadata", "POST", { url: raw });
-      if (id !== lookupId.current) return;
-      set((prev) => ({
-        ...prev,
-        url: result.url,
-        title: prev.title || result.title,
-        creator: prev.creator || result.creator,
-        artwork: result.artwork,
-        kind: result.url.includes("open.spotify.com/audiobook/")
-          ? "audiobook"
-          : prev.kind,
-      }));
-      last.current = result.url;
-      setHint(
-        result.available
-          ? "Details added. You can edit them below."
-          : "Add the details below to log this item.",
-      );
-    } catch (e) {
-      if (id === lookupId.current)
-        setHint(
-          e instanceof Error
-            ? e.message
-            : "Lookup failed. Enter details manually.",
-        );
-    } finally {
-      if (id === lookupId.current) setLoading(false);
-    }
-  }
-  return (
-    <Modal
-      title={entry ? "Edit listening entry" : "Log a listen"}
-      close={close}
-    >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void act.run(async () => {
-            await api(
-              entry ? "/me/entries/" + entry.id : "/me/entries",
-              entry ? "PUT" : "POST",
-              { ...v, ...(entry && { revision: entry.revision }) },
-            );
-            await done();
-          });
-        }}
-      >
-        <label>
-          <span>
-            <Link2 size={15} /> Source link
-          </span>
-          <input
-            readOnly={!!entry}
-            type="url"
-            maxLength={2048}
-            placeholder="Spotify, YouTube or a publisher link"
-            value={v.url}
-            onBlur={(e) => void lookup(e.target.value)}
-            onChange={(e) => {
-              ++lookupId.current;
-              last.current = "";
-              setLoading(false);
-              setHint("");
-              set((prev) => ({ ...prev, url: e.target.value, artwork: "" }));
-            }}
-          />
-        </label>
-        <small aria-live="polite">
-          {loading
-            ? "Looking up details…"
-            : hint ||
-              "Paste a link for available metadata, or enter a title manually."}
-        </small>
-        <label>
-          Title
-          <input
-            required
-            value={v.title}
-            maxLength={250}
-            onChange={(e) => change("title", e.target.value)}
-          />
-        </label>
-        <details>
-          <summary>Artwork</summary>
-          <label>
-            Provider image URL
-            <input
-              type="url"
-              maxLength={2048}
-              value={v.artwork}
-              onChange={(e) => change("artwork", e.target.value)}
-            />
-          </label>
-          <small>Use a Spotify or YouTube thumbnail URL, or leave blank.</small>
-        </details>
-        <div className="pair">
-          <label>
-            Format
-            <select
-              value={v.kind}
-              onChange={(e) => change("kind", e.target.value as Draft["kind"])}
-            >
-              <option value="podcast">Podcast episode</option>
-              <option value="audiobook">Audiobook</option>
-            </select>
-          </label>
-          <label>
-            Status
-            <select
-              value={v.status}
-              onChange={(e) =>
-                change("status", e.target.value as Draft["status"])
-              }
-            >
-              {Object.entries(statuses).map(([k, s]) => (
-                <option value={k} key={k}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="pair">
-          <label>
-            Creator
-            <input
-              maxLength={180}
-              value={v.creator}
-              onChange={(e) => change("creator", e.target.value)}
-            />
-          </label>
-          {v.kind === "podcast" && (
-            <label>
-              Podcast show
-              <input
-                maxLength={180}
-                value={v.show_name}
-                onChange={(e) => change("show_name", e.target.value)}
-              />
-            </label>
-          )}
-        </div>
-        <div className="pair">
-          <label>
-            Rating
-            <select
-              value={v.rating ?? ""}
-              onChange={(e) =>
-                change("rating", e.target.value ? Number(e.target.value) : null)
-              }
-            >
-              <option value="">Unrated</option>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n} value={n}>
-                  {n} / 5
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Additional replays
-            <input
-              type="number"
-              min="0"
-              max="100000"
-              disabled={!entry?.finished_at && v.status !== "finished"}
-              value={v.replays}
-              onChange={(e) => change("replays", Number(e.target.value))}
-            />
-          </label>
-        </div>
-        <label>
-          <span>
-            <LockKeyhole size={14} /> Private note
-          </span>
-          <textarea
-            maxLength={8000}
-            value={v.note}
-            onChange={(e) => change("note", e.target.value)}
-          />
-        </label>
-        <label>
-          Public takeaway
-          <textarea
-            maxLength={2000}
-            value={v.takeaway}
-            onChange={(e) => change("takeaway", e.target.value)}
-          />
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={v.shared}
-            onChange={(e) => change("shared", e.target.checked)}
-          />{" "}
-          Share this entry on my public profile
-        </label>
-        <button className="button primary" disabled={act.busy || loading}>
-          Save entry <ArrowRight size={16} />
-        </button>
-      </form>
-      {entry && (
-        <div className="account-tools">
-          <button onClick={() => setDeleting(!deleting)}>Delete entry</button>
-          {deleting && (
-            <button
-              className="danger"
-              disabled={act.busy}
-              onClick={() =>
-                void act.run(async () => {
-                  await api("/me/entries/" + entry.id, "DELETE", {
-                    revision: entry.revision,
-                  });
-                  await done();
-                })
-              }
-            >
-              Confirm permanent deletion
-            </button>
-          )}
-        </div>
       )}
       <ErrorText text={act.error} />
     </Modal>

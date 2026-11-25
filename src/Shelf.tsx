@@ -1,37 +1,9 @@
 import { ArrowUpRight, ArrowRight, BookmarkPlus, Search } from "lucide-react";
 import { useState } from "react";
 import { api, ErrorText, useAction } from "./ui";
-import { blank, type Draft } from "../shared/diary";
+import { formats, rooms, type Draft } from "../shared/diary";
+import { picks, draftFromPick } from "./picks";
 
-const picks = [
-  {
-    title: "Ten Thousand Years",
-    show: "99% Invisible",
-    creator: "Roman Mars",
-    category: "Design",
-    art: "signal",
-    url: "https://99percentinvisible.org/episode/ten-thousand-years/",
-    why: "How do you design a warning that someone can read ten millennia from now?",
-  },
-  {
-    title: "Lorde — “Sober”",
-    show: "Song Exploder",
-    creator: "Hrishikesh Hirway",
-    category: "Music",
-    art: "groove",
-    url: "https://songexploder.net/lorde",
-    why: "Lorde opens up the early demos behind a song from Melodrama.",
-  },
-  {
-    title: "The Intelligence of Plants",
-    show: "On Being",
-    creator: "Krista Tippett",
-    category: "Nature",
-    art: "botanic",
-    url: "https://onbeing.org/programs/robin-wall-kimmerer-the-intelligence-of-plants-2022/",
-    why: "Botanist Robin Wall Kimmerer listens closely to what plants can teach us.",
-  },
-];
 export function Shelf({
   full = false,
   save,
@@ -43,85 +15,84 @@ export function Shelf({
     <section className="shelf">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">
-            <span className="dash" /> EDITOR’S PICKS
-          </p>
-          <h2>The listening shelf</h2>
+          <p className="eyebrow">EDITORIAL SELECTION</p>
+          <h2>
+            The open archive<span>.</span>
+          </h2>
         </div>
         {!full && (
           <a className="plainlink" href="/discover">
-            Explore all <ArrowRight size={17} />
+            Discover all <ArrowRight size={16} />
           </a>
         )}
       </div>
-      <div className="picks">
-        {picks.map((p) => (
-          <article className="pick" key={p.art}>
-            <a
-              href={p.url}
-              target="_blank"
-              rel="noreferrer"
-              className={"cover " + p.art}
-              aria-label={"Open " + p.title + " at " + p.show}
-            >
-              <span aria-hidden="true" className="cover-type">
-                {p.art === "signal" ? (
-                  <>
-                    99%
-                    <br />
-                    INVISIBLE
-                  </>
-                ) : p.art === "groove" ? (
-                  <>
-                    SONG
-                    <br />
-                    EXPLODER
-                  </>
-                ) : (
-                  <>
-                    On
-                    <br />
-                    <i>Being</i>
-                  </>
-                )}
-              </span>
-              <span aria-hidden="true" className="cover-pattern" />
-            </a>
-            <div className="pick-text">
-              <small>{p.category} / Podcast</small>
-              <h3>
-                <a href={p.url} target="_blank" rel="noreferrer">
-                  {p.title}
-                </a>
-              </h3>
-              <p>{p.show}</p>
-              {full && (
-                <>
-                  <p className="why">{p.why}</p>
-                  <button
-                    className="plainlink"
-                    onClick={() =>
-                      save({
-                        ...blank,
-                        title: p.title,
-                        url: p.url,
-                        creator: p.creator,
-                        show_name: p.show,
-                      })
-                    }
+      {formats.map((kind) => (
+        <section className={"room room-" + kind} key={kind}>
+          <h3>{rooms[kind]}</h3>
+          <div className="picks">
+            {picks
+              .filter((p) => p.kind === kind)
+              .map((p) => (
+                <article className="pick" key={p.art}>
+                  <a
+                    href={p.url}
+                    className="pick-art"
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={"Open " + p.title}
                   >
-                    <BookmarkPlus size={16} /> Log episode
-                  </button>
-                </>
-              )}
-            </div>
-          </article>
-        ))}
-      </div>
+                    <img
+                      src={"/art/" + p.art + ".webp"}
+                      width="160"
+                      height="160"
+                      loading="lazy"
+                      alt=""
+                    />
+                  </a>
+                  <div className="pick-text">
+                    <small>
+                      {p.kind} · {p.category}
+                    </small>
+                    <h3>
+                      <a href={p.url} target="_blank" rel="noreferrer">
+                        {p.title}
+                      </a>
+                    </h3>
+                    <p>{p.show}</p>
+                    {full && (
+                      <>
+                        <p className="why">{p.why}</p>
+                        <button
+                          className="plainlink"
+                          onClick={() => save(draftFromPick(p))}
+                        >
+                          <BookmarkPlus size={15} />{" "}
+                          {p.kind === "podcast"
+                            ? "Log episode"
+                            : p.kind === "documentary"
+                              ? "Log film"
+                              : "Log book"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </article>
+              ))}
+          </div>
+        </section>
+      ))}
     </section>
   );
 }
-export function Discover({ save }: { save: (d: Draft) => void }) {
+export function Discover({
+  save,
+  signedIn,
+  signIn,
+}: {
+  save: (d: Draft) => void;
+  signedIn: boolean;
+  signIn: () => void;
+}) {
   const [q, setQ] = useState(""),
     [result, setResult] = useState<{
       source: string;
@@ -138,12 +109,20 @@ export function Discover({ save }: { save: (d: Draft) => void }) {
           Find your next <em>listen.</em>
         </h1>
         <p>
+          <a href="/feed">Listening feed</a> ·{" "}
+          <a href="/people">Find listeners</a>
+        </p>
+        <p>
           Search the podcast directory, or start with an episode from the shelf.
         </p>
         <form
           className="searchbar"
           onSubmit={(e) => {
             e.preventDefault();
+            if (!signedIn) {
+              signIn();
+              return;
+            }
             void act.run(async () => {
               setResult(null);
               setResult(await api("/search?q=" + encodeURIComponent(q)));
@@ -156,12 +135,16 @@ export function Discover({ save }: { save: (d: Draft) => void }) {
             placeholder="Search for a podcast or creator"
             minLength={2}
             maxLength={100}
-            required
+            required={signedIn}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
           <button className="button" disabled={act.busy}>
-            {act.busy ? "Searching…" : "Search"}
+            {act.busy
+              ? "Searching…"
+              : signedIn
+                ? "Search"
+                : "Sign in to search"}
           </button>
         </form>
         <ErrorText text={act.error} />

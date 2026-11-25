@@ -1,16 +1,25 @@
+import { emptyExperience, type Experience } from "./experience";
+export const formats = ["podcast", "audiobook", "documentary"] as const;
+export const rooms = {
+  podcast: "Podcast diary",
+  audiobook: "Audiobooks",
+  documentary: "Documentaries",
+} as const;
 export const statuses = {
-  want: "Want to Listen",
-  listening: "Listening",
+  want: "Saved for later",
+  listening: "In progress",
   finished: "Finished",
 } as const;
 export type Status = keyof typeof statuses;
 export interface Draft {
+  import_key?: string;
+  experience: Experience;
   url: string;
   title: string;
   creator: string;
   show_name: string;
   artwork: string;
-  kind: "podcast" | "audiobook";
+  kind: (typeof formats)[number];
   status: Status;
   note: string;
   takeaway: string;
@@ -33,6 +42,7 @@ export interface Profile {
   show_shows: boolean;
   show_replays: boolean;
   show_badges: boolean;
+  leaderboard_opt_in: boolean;
 }
 export const emptyProfile: Profile = {
   username: "",
@@ -43,8 +53,10 @@ export const emptyProfile: Profile = {
   show_shows: false,
   show_replays: false,
   show_badges: false,
+  leaderboard_opt_in: false,
 };
 export const blank: Draft = {
+  experience: emptyExperience,
   url: "",
   title: "",
   creator: "",
@@ -76,8 +88,15 @@ export type PublicEntry = Pick<
   | "rating"
   | "url"
   | "updated_at"
->;
+> & {
+  moments?: {
+    title: string;
+    reflection: string;
+    position_seconds: number | null;
+  }[];
+};
 export interface PublicPage {
+  next_cursor?: string | null;
   name: string;
   username: string;
   bio: string;
@@ -85,3 +104,24 @@ export interface PublicPage {
   badges: number[] | null;
   entries: PublicEntry[];
 }
+
+export type DeckEntry = Pick<
+  Entry,
+  | "id"
+  | "title"
+  | "creator"
+  | "show_name"
+  | "kind"
+  | "artwork"
+  | "url"
+  | "status"
+> & { created_at: string };
+export interface DeckPage {
+  revision: number;
+  entries: DeckEntry[];
+  total: number;
+  start: number;
+  next_cursor: string | null;
+  newer_cursor: string | null;
+}
+export type DeckChange = { kind: "created" | "edited" | "deleted"; id: string };

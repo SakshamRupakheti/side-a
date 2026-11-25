@@ -53,6 +53,7 @@ test(
       const data = await res.json();
       assert.equal(res.status, expected, path + " " + JSON.stringify(data));
       return {
+        headers: res.headers,
         data,
         cookie: res.headers
           .getSetCookie()
@@ -60,6 +61,8 @@ test(
           .join("; "),
       };
     }
+    await request("/search?q=music", "GET", undefined, "", 401);
+    await request("/me/export", "GET", undefined, "", 401);
     const password = randomBytes(20).toString("hex");
     const signup = async (name) =>
       (
@@ -87,6 +90,11 @@ test(
     await request("/me/profile", "PUT", profile, b, 409);
     await request("/me/profile", "PUT", { ...profile, username: "noel" }, b);
     await request("/u/mira", "GET", undefined, "", 404);
+    const deck = async (cookie = a, query = "") =>
+      (await request("/me/deck" + query, "GET", undefined, cookie)).data;
+    await request("/me/deck", "GET", undefined, "", 401);
+    assert.deepEqual((await deck()).entries, []);
+    assert.equal((await deck()).total, 0);
     const base = {
       url: "https://youtu.be/jfKfPfyJRdk?t=12",
       title: "A listening test",
@@ -118,6 +126,73 @@ test(
       b,
       201,
     );
+    const one = await deck();
+    assert.equal(one.total, 1);
+    assert.equal(one.entries[0].id, id);
+    assert.equal(one.entries[0].status, "want");
+    assert.equal((await deck(b)).entries[0].title, "Noel’s private title");
+    for (const field of [
+      "experience",
+      "note",
+      "takeaway",
+      "owner",
+      "email",
+      "shared",
+    ])
+      assert.ok(!(field in one.entries[0]));
+    assert.equal(
+      (await request("/me/entries/" + id, "GET", undefined, a)).data.note,
+      base.note,
+    );
+    await request("/me/entries/" + id, "GET", undefined, b, 404);
+    await request("/me/deck?anchor=" + id, "GET", undefined, b, 404);
+    await request("/me/deck?direction=newer", "GET", undefined, a, 400);
+    await request("/me/deck?cursor=bad", "GET", undefined, a, 400);
+    const retryDraft = {
+      ...base,
+      url: "",
+      title: "Manual retry",
+      import_key: crypto.randomUUID(),
+    };
+    const [first, retried] = await Promise.all(
+      [1, 2].map(() => request("/me/entries", "POST", retryDraft, a, 201)),
+    );
+    assert.equal(retried.data.id, first.data.id);
+    assert.equal((await deck()).total, 2);
+    assert.deepEqual(
+      (await deck()).entries.map((e) => e.id),
+      [id, first.data.id],
+    );
+    await request(
+      "/me/entries",
+      "POST",
+      { ...retryDraft, title: "Changed" },
+      a,
+      409,
+    );
+    const separate = await request("/me/entries", "POST", retryDraft, b, 201);
+    assert.notEqual(first.data.id, separate.data.id);
+    await request(
+      "/me/entries/" + first.data.id,
+      "DELETE",
+      { revision: 1 },
+      b,
+      409,
+    );
+    await request(
+      "/me/entries/" + separate.data.id,
+      "DELETE",
+      { revision: 1 },
+      b,
+    );
+    await request("/me/entries/" + first.data.id, "DELETE", { revision: 1 }, a);
+    for (const invalid of [
+      { kind: "radio" },
+      { note: "a".repeat(8001) },
+      { artwork: "https://example.com/art.png" },
+    ]) {
+      await request("/me/entries", "POST", { ...base, ...invalid }, a, 400);
+    }
     const source = "https://www.youtube.com/watch?v=jfKfPfyJRdk";
     const edit = {
       ...base,
@@ -270,6 +345,164 @@ test(
         null,
       );
     }
+    const experience = {
+      source_description: "The original synopsis.",
+      duration_seconds: 10800,
+      duration_origin: "manual",
+      personal_description: "My private summary.\nSecond line.",
+      reflection: "The thought that followed me home.",
+      moments: [
+        {
+          timestamp: "01:24:30",
+          title: "Learning",
+          description: "My timestamped reflection.",
+        },
+        {
+          timestamp: "02:00:03",
+          title: "The ending",
+          description: "Shared on purpose",
+          shared: true,
+        },
+      ],
+    };
+    const documentary = {
+      experience,
+      ...base,
+      url: "https://www.nfb.ca/film/universe/",
+      title: "Universe",
+      kind: "documentary",
+      show_name: "",
+      status: "finished",
+      shared: true,
+    };
+    for (const timestamp of ["3:00", "00:61:00", "03:00:01"]) {
+      await request(
+        "/me/entries",
+        "POST",
+        {
+          ...documentary,
+          experience: {
+            ...experience,
+            moments: [{ ...experience.moments[0], timestamp }],
+          },
+        },
+        a,
+        400,
+      );
+    }
+    await request(
+      "/me/entries",
+      "POST",
+      { ...documentary, experience: { ...experience, duration_seconds: 0 } },
+      a,
+      400,
+    );
+    const film = await request("/me/entries", "POST", documentary, a, 201);
+    const privateFilm = (
+      await request("/me/diary", "GET", undefined, a)
+    ).data.entries.find((e) => e.id === film.data.id);
+    assert.equal(privateFilm.kind, "documentary");
+    assert.equal(privateFilm.note, base.note);
+    assert.deepEqual(privateFilm.experience, experience);
+    const exportFilm = (
+      await request("/me/export", "GET", undefined, a)
+    ).data.entries.find((e) => e.id === film.data.id);
+    assert.deepEqual(exportFilm.experience, experience);
+    assert.ok(
+      !(await request("/me/diary", "GET", undefined, b)).data.entries.some(
+        (e) => e.id === film.data.id,
+      ),
+    );
+    const publishedFilm = (await request("/u/mira")).data.entries.find(
+      (e) => e.title === "Universe",
+    );
+    assert.deepEqual(publishedFilm.moments, [
+      {
+        position_seconds: 7203,
+        title: "The ending",
+        reflection: "Shared on purpose",
+      },
+    ]);
+    const publicText = JSON.stringify(publishedFilm);
+    for (const privateValue of [
+      experience.reflection,
+      experience.personal_description,
+      "example.com",
+      base.note,
+    ])
+      assert.ok(!publicText.includes(privateValue));
+    assert.equal(publishedFilm.kind, "documentary");
+    assert.ok(!Object.hasOwn(publishedFilm, "note"));
+    assert.ok(!Object.hasOwn(publishedFilm, "experience"));
+    assert.ok(
+      !JSON.stringify(publishedFilm).includes(
+        experience.moments[0].description,
+      ),
+    );
+    const consentOff = {
+      ...experience,
+      moments: experience.moments.map((m) => ({ ...m, shared: false })),
+    };
+    await request(
+      "/me/entries/" + film.data.id,
+      "PUT",
+      { ...documentary, revision: 1, experience: consentOff },
+      a,
+    );
+    assert.deepEqual(
+      (await request("/u/mira")).data.entries.find(
+        (e) => e.title === documentary.title,
+      ).moments,
+      [],
+    );
+    await request(
+      "/me/entries/" + film.data.id,
+      "PUT",
+      { ...documentary, revision: 2 },
+      a,
+    );
+    const legacy = { ...documentary };
+    delete legacy.experience;
+    await request(
+      "/me/entries/" + film.data.id,
+      "PUT",
+      { ...legacy, revision: 3, shared: false },
+      a,
+    );
+    assert.ok(
+      !(await request("/u/mira")).data.entries.some(
+        (e) => e.title === "Universe",
+      ),
+    );
+    const path = "/me/entries/" + film.data.id;
+    const preserved = (
+      await request("/me/diary", "GET", undefined, a)
+    ).data.entries.find((e) => e.id === film.data.id);
+    assert.deepEqual(preserved.experience, experience);
+    const revised = {
+      ...experience,
+      reflection: "An updated thought.",
+      moments: [experience.moments[1]],
+    };
+    await request(
+      path,
+      "PUT",
+      { ...documentary, experience: revised, revision: 4 },
+      b,
+      404,
+    );
+    await request(
+      path,
+      "PUT",
+      { ...documentary, experience: revised, revision: 4, shared: false },
+      a,
+    );
+    assert.deepEqual(
+      (await request("/me/diary", "GET", undefined, a)).data.entries.find(
+        (e) => e.id === film.data.id,
+      ).experience,
+      revised,
+    );
     const thresholds = [1, 5, 10, 50, 100];
     for (let count = 2; count <= 100; count++) {
       await request(
@@ -294,6 +527,190 @@ test(
         );
       }
     }
+    const latestDeck = await deck();
+    assert.equal(latestDeck.total, 103);
+    assert.equal(latestDeck.entries.length, 25);
+    assert.equal(latestDeck.start, 78);
+    const allCovers = [...latestDeck.entries];
+    let earlier = latestDeck;
+    while (earlier.next_cursor) {
+      earlier = await deck(
+        a,
+        "?cursor=" + encodeURIComponent(earlier.next_cursor),
+      );
+      allCovers.unshift(...earlier.entries);
+    }
+    assert.equal(allCovers.length, 103);
+    assert.equal(new Set(allCovers.map((e) => e.id)).size, 103);
+    assert.deepEqual(
+      allCovers.map((e) => e.created_at),
+      allCovers.map((e) => e.created_at).sort(),
+    );
+    assert.equal(allCovers[0].id, id);
+    assert.equal(allCovers[0].created_at, one.entries[0].created_at);
+    const next = await deck(
+      a,
+      "?direction=newer&cursor=" + encodeURIComponent(earlier.newer_cursor),
+    );
+    assert.equal(next.start, earlier.entries.length);
+    assert.equal(next.entries[0].id, allCovers[next.start].id);
+    const middle = await deck(a, "?anchor=" + allCovers[45].id);
+    assert.equal(middle.start, 33);
+    assert.equal(middle.entries[12].id, allCovers[45].id);
+    assert.deepEqual((await deck()).entries, latestDeck.entries);
+    const ownerPage = (await request("/me/diary", "GET", undefined, a)).data;
+    assert.equal(ownerPage.entries.length, 25);
+    const hiddenOnFirst = await request(
+      "/me/diary?featured=" + encodeURIComponent(source),
+      "GET",
+      undefined,
+      a,
+    );
+    assert.equal(hiddenOnFirst.data.featured[0].id, id);
+    assert.ok(!ownerPage.entries.some((e) => e.id === id));
+    const otherShelf = await request(
+      "/me/diary?featured=" + encodeURIComponent(source),
+      "GET",
+      undefined,
+      b,
+    );
+    assert.notEqual(otherShelf.data.featured[0].id, id);
+    const page2 = (
+      await request(
+        "/me/diary?cursor=" + encodeURIComponent(ownerPage.next_cursor),
+        "GET",
+        undefined,
+        a,
+      )
+    ).data;
+    assert.ok(
+      page2.entries.every(
+        (e) => !ownerPage.entries.some((prev) => prev.id === e.id),
+      ),
+    );
+    let publicCount = 0,
+      cursor = null;
+    const titles = new Set();
+    do {
+      const page = (
+        await request(
+          "/u/mira" + (cursor ? "?cursor=" + encodeURIComponent(cursor) : ""),
+        )
+      ).data;
+      assert.ok(page.entries.length <= 25);
+      for (const e of page.entries) {
+        assert.ok(!titles.has(e.title));
+        titles.add(e.title);
+      }
+      publicCount += page.entries.length;
+      cursor = page.next_cursor;
+    } while (cursor);
+    assert.equal(publicCount, 100);
+    assert.equal(
+      (await request("/me/export", "GET", undefined, a)).data.entries.length,
+      103,
+    );
+    await request("/u/mira?cursor=bad", "GET", undefined, "", 400);
+    await request("/me/diary?cursor=bad", "GET", undefined, a, 400);
+    await request("/me/profile", "PUT", { ...profile, published: false }, a);
+    await request("/u/mira", "GET", undefined, "", 404);
+    const { DB } = await server.getWorker().getEnv();
+    const owner = (
+      await DB.prepare("SELECT id FROM user WHERE name='mira'").first()
+    ).id;
+    // Large foreign collection with tied timestamps. Each API request should
+    // visit one chronological index page and return only lightweight covers.
+    const manyOwner = (
+      await DB.prepare("SELECT id FROM user WHERE name='noel'").first()
+    ).id;
+    const sequence =
+      "WITH RECURSIVE seq(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM seq WHERE n<1025) ";
+    await DB.batch([
+      DB.prepare(
+        sequence + "INSERT INTO media SELECT printf('large-%04d',n) FROM seq",
+      ),
+      DB.prepare(
+        "INSERT INTO source SELECT 'manual',id,'',id FROM media WHERE id GLOB 'large-*'",
+      ),
+      DB.prepare(
+        "INSERT INTO entry(id,owner,media_id,provider,external_id,title,creator,show_name,artwork,kind,status,created_at,updated_at) SELECT media_id,?,media_id,provider,external_id,media_id,'','','',CASE cast(substr(media_id,7) as integer)%3 WHEN 0 THEN 'podcast' WHEN 1 THEN 'audiobook' ELSE 'documentary' END, 'want','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z' FROM source WHERE media_id GLOB 'large-*'",
+      ).bind(manyOwner),
+    ]);
+    let many = await deck(b);
+    const stale = many.next_cursor;
+    assert.equal(many.total, 1026);
+    assert.equal(many.start, 1001);
+    const ids = new Set(),
+      kinds = new Set();
+    while (true) {
+      for (const entry of many.entries) {
+        assert.ok(!ids.has(entry.id));
+        ids.add(entry.id);
+        kinds.add(entry.kind);
+      }
+      if (!many.next_cursor) break;
+      many = await deck(b, "?cursor=" + encodeURIComponent(many.next_cursor));
+    }
+    assert.equal(ids.size, 1026);
+    assert.equal(kinds.size, 3);
+    await DB.prepare("DELETE FROM entry WHERE id=? AND owner=?")
+      .bind("large-0001", manyOwner)
+      .run();
+    await request(
+      "/me/deck?cursor=" + encodeURIComponent(stale),
+      "GET",
+      undefined,
+      b,
+      409,
+    );
+    assert.equal((await deck(b)).total, 1025);
+    await DB.prepare("DELETE FROM entry WHERE owner=? AND id GLOB 'large-*'")
+      .bind(manyOwner)
+      .run();
+    for (const [filter, index] of [
+      ["", "entry_history"],
+      [" AND shared=1", "public_history"],
+    ]) {
+      const sql =
+        "SELECT id FROM entry WHERE owner=?" +
+        filter +
+        " ORDER BY updated_at DESC,id DESC LIMIT 26";
+      const plan = await DB.prepare("EXPLAIN QUERY PLAN " + sql)
+        .bind(owner)
+        .all();
+      assert.ok(plan.results.some((r) => r.detail.includes(index)));
+      const probe = await DB.prepare(sql).bind(owner).all();
+      t.diagnostic(
+        index +
+          " page probe: " +
+          probe.results.length +
+          " records, D1 rows_read=" +
+          probe.meta.rows_read +
+          ", rows_written=" +
+          probe.meta.rows_written,
+      );
+      assert.equal(probe.meta.rows_written, 0);
+    }
+    let limited;
+    for (let i = 0; i < 21; i++) {
+      const response = await server.fetch(origin + "/api/me/metadata", {
+        method: "POST",
+        headers: {
+          Origin: origin,
+          Cookie: b,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: "bad" }),
+      });
+      if (response.status === 429) {
+        limited = { headers: response.headers, data: await response.json() };
+        break;
+      }
+      assert.equal(response.status, 400);
+    }
+    assert.ok(limited);
+    assert.ok(Number(limited.headers.get("Retry-After")) > 0);
+    assert.match(limited.data.error, /Try again/);
     await request("/me/account", "DELETE", { confirmation: "DELETE" }, a);
     await request("/u/mira", "GET", undefined, "", 404);
     await request("/me/diary", "GET", undefined, a, 401);
@@ -301,6 +718,21 @@ test(
       (await request("/me/diary", "GET", undefined, b)).data.entries.length,
       1,
     );
+    assert.equal(
+      (await DB.prepare("SELECT count(*) AS n FROM favorite_moment").first()).n,
+      0,
+    );
+    for (const table of ["account", "session"])
+      assert.equal(
+        (
+          await DB.prepare(
+            "SELECT count(*) AS n FROM " + table + " WHERE user_id=?",
+          )
+            .bind(owner)
+            .first()
+        ).n,
+        0,
+      );
     await request("/auth/sign-out", "POST", {}, b);
     const login = await request("/auth/sign-in/email", "POST", {
       email: "noel@example.com",
