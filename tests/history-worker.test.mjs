@@ -169,6 +169,11 @@ test(
       ["added"],
     );
     const archive = (await request("/me/export", a)).result;
+    assert.ok(
+      archive.entries.every((e) =>
+        e.artwork.startsWith("https://i.ytimg.com/vi/"),
+      ),
+    );
     assert.deepEqual(
       archive.entries.find((e) => e.id === first.id),
       first,
@@ -224,6 +229,59 @@ test(
     const owner = await DB.prepare("SELECT id FROM user WHERE email=?")
       .bind("archivist@example.com")
       .first("id");
+    await DB.prepare(
+      "UPDATE entry SET artwork='',cover_auto=0 WHERE owner=? AND external_id=?",
+    )
+      .bind(owner, item(2).id)
+      .run();
+    await request("/me/covers", "", { automatic: false }, "", "POST", 401);
+    await request(
+      "/me/covers",
+      a,
+      { automatic: false, owner: "someone-else" },
+      "",
+      "POST",
+      400,
+    );
+    await request(
+      "/me/covers",
+      a,
+      { automatic: false },
+      "",
+      "POST",
+      403,
+      "https://evil.invalid",
+    );
+    assert.equal((await request("/me/covers", b)).result.missing, 0);
+    assert.equal(
+      (await request("/me/covers", b, { automatic: false })).result.restored,
+      0,
+    );
+    assert.equal((await request("/me/covers", a)).result.missing, 1);
+    const repairId = await DB.prepare(
+      "SELECT id FROM entry WHERE owner=? AND external_id=?",
+    )
+      .bind(owner, item(2).id)
+      .first("id");
+    const openDraft = (await request("/me/entries/" + repairId, a)).result;
+    assert.equal(
+      (await request("/me/covers", a, { automatic: false })).result.restored,
+      1,
+    );
+    assert.equal((await request("/me/covers", a)).result.missing, 0);
+    const repaired = (await request("/me/entries/" + repairId, a)).result;
+    assert.equal(repaired.revision, openDraft.revision);
+    assert.equal(repaired.updated_at, openDraft.updated_at);
+    await request(
+      "/me/entries/" + repairId,
+      a,
+      { ...openDraft, note: "A concurrent thought" },
+      "",
+      "PUT",
+    );
+    const edited = (await request("/me/entries/" + repairId, a)).result;
+    assert.equal(edited.artwork, repaired.artwork);
+    assert.equal(edited.note, "A concurrent thought");
     const measured = {
       prepare: (s) => DB.prepare(s),
       batch: async (statements) => {

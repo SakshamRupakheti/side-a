@@ -3,6 +3,7 @@ import type { DeckChange, DeckPage } from "../shared/diary";
 import { api, message } from "./ui";
 import { ListeningDeck } from "./ListeningDeck";
 import { anchorForChange, extendWindow } from "./collection-window";
+import { CoverRepair } from "./CoverRepair";
 
 export interface PersonalStage {
   page: DeckPage;
@@ -40,6 +41,7 @@ export function PersonalCollection({
     current.current.slot = slot;
     setPosition(slot);
   }, []);
+  const coversChanged = useCallback(() => setRetry((n) => n + 1), []);
   const assign = useCallback((next: DeckPage) => {
     current.current.page = next;
     setPage(next);
@@ -140,6 +142,7 @@ export function PersonalCollection({
 
   return (
     <>
+      <CoverRepair refresh={change} onChanged={coversChanged} />
       {page ? (
         <ListeningDeck personal={{ page, focus, onPosition, add, open }} />
       ) : (

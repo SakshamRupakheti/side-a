@@ -1251,10 +1251,18 @@ footer {
   overflow-wrap: anywhere;
 }
 .type-sleeve b {
+  min-height: 0;
+  flex-shrink: 1;
+  line-height: 1.1;
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.type-sleeve b.long-title {
+  font-size: clamp(1.05rem, 2.2vw, 2rem);
+  flex: none;
+  max-height: 4.4em;
 }
 .empty-sleeve {
   position: absolute;

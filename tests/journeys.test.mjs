@@ -630,7 +630,7 @@ test(
         sequence + "INSERT INTO media SELECT printf('large-%04d',n) FROM seq",
       ),
       DB.prepare(
-        "INSERT INTO source SELECT 'manual',id,'',id FROM media WHERE id GLOB 'large-*'",
+        "INSERT INTO source(provider,external_id,url,media_id) SELECT 'manual',id,'',id FROM media WHERE id GLOB 'large-*'",
       ),
       DB.prepare(
         "INSERT INTO entry(id,owner,media_id,provider,external_id,title,creator,show_name,artwork,kind,status,created_at,updated_at) SELECT media_id,?,media_id,provider,external_id,media_id,'','','',CASE cast(substr(media_id,7) as integer)%3 WHEN 0 THEN 'podcast' WHEN 1 THEN 'audiobook' ELSE 'documentary' END, 'want','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z' FROM source WHERE media_id GLOB 'large-*'",

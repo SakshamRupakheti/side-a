@@ -1,5 +1,6 @@
 import { social, viewer, socialDocument } from "./social";
 import { importBatch, importScope, savedIdentities } from "./history";
+import { coverStatus, repairCover } from "./artwork";
 import { createMiddleware } from "hono/factory";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
@@ -223,6 +224,16 @@ app.get("/api/me/deck", async (c) => {
     ),
   );
 });
+app.get("/api/me/covers", async (c) =>
+  c.json(await coverStatus(c.env.DB, c.get("owner"), c.env)),
+);
+app.post("/api/me/covers", async (c) => {
+  const { automatic } = z
+    .object({ automatic: z.boolean() })
+    .strict()
+    .parse(await c.req.json());
+  return c.json(await repairCover(c.env.DB, c.get("owner"), c.env, automatic));
+});
 app.get("/api/me/entries/:id", async (c) => {
   const [entry] = await entries(
     c.env.DB,
@@ -259,7 +270,13 @@ app.post("/api/me/metadata", async (c) => {
 });
 app.post("/api/me/entries", async (c) => {
   const e = entryInput.parse(await c.req.json());
-  return c.json({ id: await createEntry(c.env.DB, c.get("owner"), e) }, 201);
+  const id = await createEntry(c.env.DB, c.get("owner"), e);
+  c.executionCtx.waitUntil(
+    repairCover(c.env.DB, c.get("owner"), c.env, true, id).catch(
+      () => undefined,
+    ),
+  );
+  return c.json({ id }, 201);
 });
 app.put("/api/me/entries/:id", async (c) => {
   const data = entryInput
@@ -271,6 +288,11 @@ app.put("/api/me/entries/:id", async (c) => {
     c.req.param("id"),
     data.revision,
     data,
+  );
+  c.executionCtx.waitUntil(
+    repairCover(c.env.DB, c.get("owner"), c.env, true, c.req.param("id")).catch(
+      () => undefined,
+    ),
   );
   return c.json({ saved: true });
 });

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { HTTPException } from "hono/http-exception";
+import { youtubeCover } from "../shared/artwork.ts";
 import {
   historyKey,
   historyBatchSize,
@@ -145,6 +146,7 @@ export async function importBatch(
       media: r.media,
       entry: r.entry,
       url: r.url,
+      artwork: youtubeCover(r.item.provider, r.item.id),
     })),
   );
   const from = " FROM json_each(?) j ";
@@ -168,8 +170,8 @@ export async function importBatch(
       .bind(data),
     db
       .prepare(
-        "INSERT INTO entry(id,owner,media_id,provider,external_id,kind,title,creator,show_name,artwork,status,finished_at,created_at,updated_at,provenance,import_key,history_evidence,history_run) " +
-          "SELECT j.value->>'$.entry',?,s.media_id,s.provider,s.external_id,'podcast',j.value->>'$.title',j.value->>'$.creator',j.value->>'$.creator','',?,?,?,?, 'history',s.provider||':'||s.external_id,j.value->'$.evidence',?" +
+        "INSERT INTO entry(id,owner,media_id,provider,external_id,kind,title,creator,show_name,artwork,status,finished_at,created_at,updated_at,provenance,import_key,history_evidence,history_run,cover_auto) " +
+          "SELECT j.value->>'$.entry',?,s.media_id,s.provider,s.external_id,'podcast',j.value->>'$.title',j.value->>'$.creator',j.value->>'$.creator',coalesce(nullif(j.value->>'$.artwork',''),s.cover_art),?,?,?,?, 'history',s.provider||':'||s.external_id,j.value->'$.evidence',?,1" +
           from +
           join +
           "WHERE true ON CONFLICT(owner,media_id) DO NOTHING",

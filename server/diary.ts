@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { youtubeCover } from "../shared/artwork.ts";
 import {
   emptyExperience,
   timestampSeconds,
@@ -509,12 +510,16 @@ export async function createEntry(db: D1Database, owner: string, e: Input) {
         .prepare(
           "INSERT INTO entry(id,owner,media_id,provider,external_id," +
             columns +
-            ",import_key,request_hash,experience,finished_at,created_at,updated_at) SELECT ?,?,media_id,provider,external_id,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? FROM source WHERE provider=? AND external_id=?",
+            ",import_key,request_hash,experience,finished_at,created_at,updated_at,cover_auto) SELECT ?,?,media_id,provider,external_id,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1 FROM source WHERE provider=? AND external_id=?",
         )
         .bind(
           id,
           owner,
-          ...attributes(e),
+          ...attributes({
+            ...e,
+            artwork:
+              e.artwork || youtubeCover(source.provider, source.external_id),
+          }),
           e.import_key ?? null,
           fingerprint,
           e.experience ? JSON.stringify(e.experience) : null,
@@ -568,9 +573,15 @@ export async function updateEntry(
       "UPDATE entry SET " +
         columns
           .split(",")
-          .map((f) => f + "=?")
+          .map((f) =>
+            f === "artwork" && !e.artwork
+              ? "artwork=CASE WHEN artwork_auto=1 THEN artwork ELSE ? END"
+              : f + "=?",
+          )
           .join(",") +
-        ",experience=coalesce(?,experience),finished_at=coalesce(finished_at,?),updated_at=?,revision=revision+1 WHERE owner=? AND id=? AND revision=?",
+        ",artwork_auto=" +
+        (e.artwork ? "0" : "artwork_auto") +
+        ",experience=coalesce(?,experience),finished_at=coalesce(finished_at,?),updated_at=?,revision=revision+1,cover_auto=1 WHERE owner=? AND id=? AND revision=?",
     )
     .bind(
       ...attributes(e),

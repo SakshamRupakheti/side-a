@@ -1,0 +1,19 @@
+.cover-repair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 16px;
+  padding: 8px 20px;
+  color: var(--soft);
+}
+.cover-repair button {
+  min-height: 44px;
+  color: var(--gold);
+}
+.cover-repair small {
+  overflow-wrap: anywhere;
+}
+.cover-repair [role="alert"] {
+  color: #e6a39d;
+}
