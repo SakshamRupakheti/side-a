@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowUpRight, Bookmark, Heart } from "lucide-react";
+import { ArrowUpRight, Bookmark, Heart, UsersRound } from "lucide-react";
 import { api, message, type Session } from "./ui";
 import type { Post, PostDraft, Person, Sleeve } from "../shared/social";
 import { picks } from "./picks";
@@ -68,15 +68,27 @@ function SleeveBody({
     </>
   );
 }
+function FindListeners({ current = false }: { current?: boolean }) {
+  return (
+    <a
+      className="find-listeners"
+      href="/people"
+      aria-current={current ? "page" : undefined}
+    >
+      <UsersRound size={28} strokeWidth={1.5} aria-hidden="true" />
+      <span>Find Listeners</span>
+    </a>
+  );
+}
 function SocialNav({ active }: { active: string }) {
   const links = [
     ["Discover", "/feed"],
     ["Following", "/feed?scope=following"],
     ["Saved posts", "/feed?scope=saved"],
-    ["People", "/people"],
   ];
   return (
     <nav className="social-nav" aria-label="Social discovery">
+      <FindListeners current={active === "People"} />
       {links.map(([text, url]) => (
         <a
           key={url}
@@ -686,6 +698,12 @@ export default function Social({
                     : scope === "following"
                       ? "Follow a listener to see their published posts here."
                       : "No published listening posts match yet."}
+                {!people && scope === "following" && (
+                  <>
+                    <br />
+                    <FindListeners />
+                  </>
+                )}
               </p>
             )}
             {(page.next_cursor || page.next) && (

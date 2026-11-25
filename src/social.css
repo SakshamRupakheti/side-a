@@ -22,6 +22,37 @@
   color: var(--gold);
   font-weight: 700;
 }
+.find-listeners,
+.social-nav .find-listeners {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  padding: 0.5rem;
+  margin-block: 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--carbon);
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.find-listeners svg,
+.social-nav .find-listeners svg {
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: var(--gold);
+}
+.find-listeners:hover,
+.social-nav .find-listeners:hover {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+.find-listeners:active {
+  background: var(--rule);
+}
 .social-reading {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -184,6 +215,7 @@
     flex-wrap: wrap;
     margin-bottom: 2rem;
     gap: 0.65rem;
+    align-items: center;
   }
   .social-nav a {
     font-size: 0.86rem;
