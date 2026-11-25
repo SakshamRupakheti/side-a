@@ -13,6 +13,7 @@ import {
   type LocalState,
 } from "./history-job";
 import "./history.css";
+import { CoverRepair } from "./CoverRepair";
 
 const PAGE = 30;
 export default function HistoryImport({ owner }: { owner: string }) {
@@ -300,6 +301,7 @@ export default function HistoryImport({ owner }: { owner: string }) {
         </p>
       )}
       {status && <p role="status">{status}</p>}
+      {job && progress.offset === job.items.length && <CoverRepair />}
       {job ? (
         <section className="history-panel">
           <h2>

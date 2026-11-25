@@ -71,11 +71,24 @@ function SleeveArt({
 }) {
   const [failed, setFailed] = useState("");
   return src && failed !== src ? (
-    <img src={src} alt="" draggable={false} onError={() => setFailed(src)} />
+    <img
+      src={src}
+      alt=""
+      draggable={false}
+      onError={() => setFailed(src)}
+      onLoad={(e) => {
+        // YouTube may serve its tiny unavailable-image placeholder with HTTP 200.
+        if (
+          src.startsWith("https://i.ytimg.com/vi/") &&
+          e.currentTarget.naturalWidth <= 120
+        )
+          setFailed(src);
+      }}
+    />
   ) : (
     <span className={small ? "mini-sleeve" : "type-sleeve"} aria-hidden="true">
       <small>{kind}</small>
-      <b>{title}</b>
+      <b className={title.length > 80 ? "long-title" : undefined}>{title}</b>
     </span>
   );
 }

@@ -24,6 +24,7 @@ test(
               BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
               LOCAL_PASSWORD_AUTH: "true",
               SOCIAL_READ_LIMIT: "600",
+              DISABLE_LOOKUPS: "true",
             },
           },
         ],
@@ -335,7 +336,7 @@ test(
     await db
       .prepare(
         cte +
-          "INSERT INTO source SELECT 'manual','bulk-'||n,'','bulk-'||n FROM seq",
+          "INSERT INTO source(provider,external_id,url,media_id) SELECT 'manual','bulk-'||n,'','bulk-'||n FROM seq",
       )
       .run();
     await db
