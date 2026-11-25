@@ -109,6 +109,10 @@ export function Discover({
           Find your next <em>listen.</em>
         </h1>
         <p>
+          <a href="/feed">Listening feed</a> ·{" "}
+          <a href="/people">Find listeners</a>
+        </p>
+        <p>
           Search the podcast directory, or start with an episode from the shelf.
         </p>
         <form

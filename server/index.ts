@@ -1,3 +1,4 @@
+import { social, viewer, socialDocument } from "./social";
 import { importBatch, importScope, savedIdentities } from "./history";
 import { createMiddleware } from "hono/factory";
 import { Hono } from "hono";
@@ -24,7 +25,7 @@ import {
   publicPage,
 } from "./diary";
 
-type AppEnv = {
+export type AppEnv = {
   Bindings: Env;
   Variables: { owner: string; signedInAt: Date; email: string; name: string };
 };
@@ -122,6 +123,7 @@ app.get("/api/u/:username", async (c) =>
       c.env.DB,
       c.req.param("username"),
       decodeCursor(c.req.query("cursor")),
+      await viewer(c),
     ),
   ),
 );
@@ -294,9 +296,34 @@ app.get("/api/me/export", async (c) => {
     )
     .bind(owner)
     .all();
+  const socialData = await db.batch([
+    db
+      .prepare(
+        "SELECT id,entry_id,caption,published,published_at,include_takeaway,include_moments,revision FROM social_post WHERE owner=?",
+      )
+      .bind(owner),
+    db.prepare("SELECT post FROM social_bookmark WHERE actor=?").bind(owner),
+    db.prepare("SELECT post FROM social_like WHERE actor=?").bind(owner),
+    db
+      .prepare(
+        "SELECT username FROM social_follow f JOIN profile p ON p.user_id=f.followed WHERE f.follower=?",
+      )
+      .bind(owner),
+    db
+      .prepare(
+        "SELECT username FROM social_block b JOIN profile p ON p.user_id=b.blocked WHERE b.blocker=?",
+      )
+      .bind(owner),
+  ]);
   c.header("Content-Disposition", 'attachment; filename="suni-diary.json"');
   return c.json({
     version: 1,
+    social: Object.fromEntries(
+      ["posts", "bookmarks", "likes", "following", "blocked"].map((k, i) => [
+        k,
+        socialData[i].results,
+      ]),
+    ),
     exported_at: new Date().toISOString(),
     user: { name: c.get("name"), email: c.get("email") },
     accounts: accounts.results,
@@ -323,6 +350,8 @@ app.delete("/api/me/account", async (c) => {
       .run();
   return c.json({ deleted: true, scope: await importScope(c.get("owner")) });
 });
+app.route("/api", social);
+app.get("/p/:id", socialDocument);
 app.notFound((c) => c.json({ error: "Page not found." }, 404));
 app.onError((err, c) => {
   if (err instanceof HTTPException)

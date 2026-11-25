@@ -26,6 +26,7 @@ import { EntryComposer } from "./EntryComposer";
 import "./style.css";
 import "./composer.css";
 
+const Social = React.lazy(() => import("./Social"));
 const HistoryImport = React.lazy(() => import("./HistoryImport"));
 type Collection = {
   entries: Entry[];
@@ -88,6 +89,10 @@ function App() {
   const path = location.pathname.replace(/\/$/, "") || "/",
     isPublic = path.startsWith("/u/"),
     discover = path === "/discover",
+    social =
+      ["/feed", "/people"].includes(path) ||
+      path.startsWith("/p/") ||
+      path.startsWith("/write/"),
     lab = path === "/swipe-lab",
     importing = path === "/import";
   const refresh = useCallback(async () => {
@@ -113,7 +118,7 @@ function App() {
       featuredKeys.current.clear();
     }
     setSession(s);
-    if (importing) return s;
+    if (importing || social) return s;
     if (s.user) {
       const featured = new URLSearchParams(
         picks.map((p) => ["featured", p.url]),
@@ -154,7 +159,7 @@ function App() {
       } else if (!s.profile) setModal("profile");
     } else setDiary(null);
     return s;
-  }, [isPublic, path, lab, discover, importing]);
+  }, [isPublic, path, lab, discover, importing, social]);
   useEffect(() => {
     void refresh().catch((e) => setError(message(e)));
   }, [refresh]);
@@ -212,6 +217,13 @@ function App() {
   }
   useEffect(() => {
     const query = new URLSearchParams(location.search);
+    if (session?.user && query.has("edit")) {
+      const id = query.get("edit") ?? "";
+      if (/^[a-f0-9-]{36}$/.test(id)) {
+        history.replaceState(null, "", "/");
+        void openRecord(id, true);
+      }
+    }
     if (session && query.has("add")) {
       history.replaceState(null, "", "/");
       setDraft({ ...blank });
@@ -359,7 +371,14 @@ function App() {
       setPaging(false);
     }
   }
-  const unknown = !(isPublic || discover || lab || importing || path === "/");
+  const unknown = !(
+    isPublic ||
+    social ||
+    discover ||
+    lab ||
+    importing ||
+    path === "/"
+  );
   return (
     <>
       <a href="#content" className="skip">
@@ -413,6 +432,12 @@ function App() {
             <h1>Page unavailable.</h1>
             <a href="/">Return to the diary</a>
           </section>
+        ) : social ? (
+          <React.Suspense
+            fallback={<p role="status">Opening social discovery…</p>}
+          >
+            <Social session={session} signin={access} />
+          </React.Suspense>
         ) : importing ? (
           !session ? (
             <p role="status">Opening import…</p>
@@ -474,6 +499,7 @@ function App() {
           <div>
             <Brand />
             <span>An open-source listening diary</span>
+            <a href="/feed">Listening feed</a>
             <a href="/privacy/">Privacy &amp; deletion</a>
           </div>
           <span className="footer-note">

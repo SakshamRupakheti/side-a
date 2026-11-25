@@ -240,6 +240,9 @@ export function Published({ page }: { page: PublicPage }) {
         <h1>{page.name}</h1>
         <p>@{page.username}</p>
         {page.bio && <p>{page.bio}</p>}
+        <a className="plainlink" href={"/feed?author=" + page.username}>
+          Listening posts
+        </a>
         <SharePoster page={page} />
         <Numbers stats={page.stats} />
       </section>

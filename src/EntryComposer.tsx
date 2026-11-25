@@ -284,6 +284,11 @@ export function EntryComposer({
       }}
       cinematic
     >
+      {entry && !dirty && (
+        <a className="plainlink" href={"/write/" + entry.id}>
+          Post to suni.
+        </a>
+      )}
       {confirmDiscard && (
         <section role="alert" aria-label="Unsaved changes">
           <p>Discard your unsaved changes?</p>

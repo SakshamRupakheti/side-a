@@ -5,6 +5,8 @@ import * as schema from "./auth-schema";
 
 export interface Env {
   DB: D1Database;
+  ASSETS: Fetcher;
+  SOCIAL_READ_LIMIT?: string;
   DISABLE_LOOKUPS?: string;
   DISABLE_HISTORY_IMPORT?: string;
   PUBLISHER_METADATA_HOSTS?: string;

@@ -366,10 +366,14 @@ export async function statistics(
       .first<Stats>()) ?? { finished: 0, shows: 0, replays: 0 }
   );
 }
+function visibleProfile(alias: string) {
+  return `NOT EXISTS(SELECT 1 FROM social_block WHERE (blocker=? AND blocked=${alias}.user_id) OR (blocked=? AND blocker=${alias}.user_id))`;
+}
 export async function publicPage(
   db: D1Database,
   username: string,
   cursor: Cursor | null = null,
+  viewer = "",
 ) {
   // A D1 batch reads profile consent, statistics and entries in one snapshot.
   const handle = username.toLowerCase();
@@ -378,20 +382,23 @@ export async function publicPage(
       .prepare(
         "SELECT " +
           fields +
-          ",coalesce(t.finished,0) AS finished,coalesce(t.shows,0) AS shows,coalesce(t.replays,0) AS replays FROM profile p LEFT JOIN listener_total t ON t.owner=p.user_id AND t.public_only=1 WHERE username=? AND published=1",
+          ",coalesce(t.finished,0) AS finished,coalesce(t.shows,0) AS shows,coalesce(t.replays,0) AS replays FROM profile p LEFT JOIN listener_total t ON t.owner=p.user_id AND t.public_only=1 WHERE username=? AND published=1 AND social_hidden=0 AND " +
+          visibleProfile("p"),
       )
-      .bind(handle),
+      .bind(handle, viewer, viewer),
     db
       .prepare(
         "SELECT " +
           publicColumns +
           ",e.id,(SELECT json_group_array(json_object('title',title,'reflection',reflection,'position_seconds',position_seconds)) FROM (SELECT title,reflection,position_seconds FROM favorite_moment WHERE entry_id=e.id AND shared=1 ORDER BY display_order)) AS moment_json" +
           sourceJoin +
-          "JOIN profile gate ON gate.user_id=e.owner WHERE gate.published=1 AND gate.username=? AND e.shared=1 " +
+          "JOIN profile gate ON gate.user_id=e.owner WHERE gate.published=1 AND gate.username=? AND e.shared=1 AND gate.social_hidden=0 AND " +
+          visibleProfile("gate") +
+          " " +
           (cursor ? "AND (e.updated_at,e.id)<(?,?) " : "") +
           "ORDER BY e.updated_at DESC,e.id DESC LIMIT 26",
       )
-      .bind(handle, ...(cursor ?? [])),
+      .bind(handle, viewer, viewer, ...(cursor ?? [])),
   ]);
   const p = profile.results[0] as unknown as Profile & Stats;
   if (!p) throw missing();

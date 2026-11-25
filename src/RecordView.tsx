@@ -105,6 +105,9 @@ export function RecordView({
             <p>{entry.takeaway}</p>
           </section>
         )}
+        <a className="button" href={"/write/" + entry.id}>
+          Post to suni.
+        </a>
         <button className="button" onClick={edit}>
           Edit listen
         </button>
