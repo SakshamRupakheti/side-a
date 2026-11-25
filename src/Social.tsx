@@ -5,6 +5,7 @@ import { api, message, type Session } from "./ui";
 import type { Post, PostDraft, Person, Sleeve } from "../shared/social";
 import { picks } from "./picks";
 import "./social.css";
+import ListeningWall from "./ListeningWall";
 
 function Artwork({ item, url }: { item: Sleeve; url?: string }) {
   const local = picks.find((x) => url && x.url === url);
@@ -513,8 +514,9 @@ export default function Social({
     }, 220);
     return () => clearTimeout(timer);
   }, [text]);
+  const wall = people && !blocked && !term;
   useEffect(() => {
-    if (!session || editing || (gated && !account)) return;
+    if (wall || !session || editing || (gated && !account)) return;
     let live = true;
     setError("");
     if (!cursor) {
@@ -563,6 +565,7 @@ export default function Social({
     account,
     author,
     blocked,
+    wall,
     cursor,
     direct,
     editing,
@@ -576,7 +579,7 @@ export default function Social({
   const heading = blocked
     ? "Blocked listeners"
     : people
-      ? "Find listeners"
+      ? "People"
       : direct
         ? "Listening postcard"
         : author
@@ -631,12 +634,18 @@ export default function Social({
             {blocked ? "Find listeners" : "Manage blocked listeners"}
           </a>
         )}
-        {error && (
+        {!wall && error && (
           <p role="alert">
             {error} <button onClick={refresh}>Try again</button>
           </p>
         )}
-        {loading ? (
+        {wall ? (
+          <ListeningWall
+            key={account ?? "guest"}
+            signedIn={!!account}
+            signin={signin}
+          />
+        ) : loading ? (
           <p role="status">Loading {people ? "listeners" : "posts"}…</p>
         ) : (
           <>

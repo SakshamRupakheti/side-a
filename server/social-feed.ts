@@ -1,6 +1,22 @@
 export function allowedPerson(column: string) {
   return `NOT EXISTS(SELECT 1 FROM social_block WHERE (blocker=?1 AND blocked=${column}) OR (blocker=${column} AND blocked=?1))`;
 }
+// Both indexes use a unique public handle as the last ordering column.
+export function wallQuery(fresh: boolean, after: boolean) {
+  const key = fresh ? "wall_recent" : "wall_order";
+  const direction = fresh ? "DESC" : "ASC";
+  return `SELECT username,display_name,${key} AS sort_key,
+    first_signal,deep_dive,explorer,thought_collector,sound_collector,
+    EXISTS(SELECT 1 FROM social_follow WHERE follower=?1 AND followed=p.user_id) AS following,
+    (SELECT json_group_array(json_object('artwork',artwork,'title',title,'url',url))
+     FROM (SELECT v.artwork,v.title,v.url FROM wall_item w CROSS JOIN social_public v ON v.id=w.id
+       WHERE w.owner=p.user_id AND w.podcast=1 ORDER BY w.published_at DESC,w.id DESC LIMIT 3)) AS covers
+    FROM profile p INDEXED BY ${fresh ? "wall_fresh" : "wall_rank"}
+    WHERE published=1 AND social_hidden=0 AND wall_recent IS NOT NULL
+    ${fresh ? "" : "AND leaderboard_opt_in=1"} AND user_id<>?1 AND ${allowedPerson("p.user_id")}
+    ${after ? "AND (" + key + ",username)" + (fresh ? "<" : ">") + "(?2,?3)" : ""}
+    ORDER BY ${key} ${direction},username ${direction} LIMIT 13`;
+}
 export const momentJson = (entry: string) =>
   `(SELECT json_group_array(json_object('title',title,'reflection',reflection,'position_seconds',position_seconds)) FROM (SELECT title,reflection,position_seconds FROM favorite_moment WHERE entry_id=${entry} AND shared=1 ORDER BY display_order))`;
 export const postFields = `v.id,v.username,v.display_name,v.title,v.creator,v.show_name,v.artwork,v.url,v.kind,v.caption,v.takeaway,v.published_at,

@@ -139,7 +139,41 @@ test("documentary migration preserves legacy records, sources, privacy and clean
       existing.map((row) => ({ ...row })),
     );
     assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
+    const migrate = (name) =>
+      db.exec(
+        readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8"),
+      );
+    migrate("0008_social.sql");
+    db.exec(
+      "INSERT INTO profile(user_id,username,display_name,published) VALUES('u','listener','Fixture',1)",
+    );
+    db.exec(
+      "INSERT INTO social_post(id,owner,entry_id,published,created_at,updated_at,published_at) VALUES('card','u','podcast',1,'x','x','x')",
+    );
+    migrate("0009_listening_wall.sql");
+    assert.deepEqual(
+      {
+        ...db
+          .prepare(
+            "SELECT leaderboard_opt_in,wall_podcasts,wall_reflections,first_signal FROM profile",
+          )
+          .get(),
+      },
+      {
+        leaderboard_opt_in: 0,
+        wall_podcasts: 1,
+        wall_reflections: 0,
+        first_signal: 1,
+      },
+    );
+    assert.equal(
+      db.prepare("SELECT count(*) n FROM favorite_moment WHERE shared=0").get()
+        .n,
+      1,
+    );
+    assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
     db.exec("DELETE FROM user WHERE id='u'");
+    assert.equal(db.prepare("SELECT count(*) n FROM wall_item").get().n, 0);
     assert.equal(db.prepare("SELECT count(*) AS n FROM media").get().n, 0);
   } finally {
     db.close();

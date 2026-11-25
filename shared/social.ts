@@ -32,6 +32,25 @@ export interface Person {
   following: number;
   mine: number;
 }
+export const socialBadges = {
+  first_signal: "First Signal",
+  deep_dive: "Deep Dive",
+  explorer: "Explorer",
+  thought_collector: "Thought Collector",
+  sound_collector: "Sound Collector",
+} as const;
+export type BadgeId = keyof typeof socialBadges;
+export interface WallListener {
+  username: string;
+  display_name: string;
+  following: number;
+  badges: BadgeId[];
+  covers: { title: string; artwork: string; url: string }[];
+}
+export interface WallPage {
+  people: WallListener[];
+  next: string | null;
+}
 export interface PostDraft extends Sleeve {
   url: string;
   id: string | null;

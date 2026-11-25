@@ -42,6 +42,7 @@ export interface Profile {
   show_shows: boolean;
   show_replays: boolean;
   show_badges: boolean;
+  leaderboard_opt_in: boolean;
 }
 export const emptyProfile: Profile = {
   username: "",
@@ -52,6 +53,7 @@ export const emptyProfile: Profile = {
   show_shows: false,
   show_replays: false,
   show_badges: false,
+  leaderboard_opt_in: false,
 };
 export const blank: Draft = {
   experience: emptyExperience,

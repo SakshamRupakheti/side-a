@@ -101,20 +101,28 @@ app.on(["POST", "GET"], "/api/auth/*", async (c) => {
   });
 });
 app.get("/api/session", async (c) => {
-  const data = await auth(c.env).api.getSession({ headers: c.req.raw.headers });
+  const enabled = methods(c.env);
+  const data = c.req.header("cookie")
+    ? await auth(c.env).api.getSession({ headers: c.req.raw.headers })
+    : null;
+  if (!data)
+    return c.json({
+      methods: enabled,
+      linkedProviders: [],
+      user: null,
+      profile: null,
+    });
+  const [providers, profile] = await Promise.all([
+    c.env.DB.prepare("SELECT provider_id FROM account WHERE user_id=?")
+      .bind(data.user.id)
+      .all<{ provider_id: string }>(),
+    getProfile(c.env.DB, data.user.id),
+  ]);
   return c.json({
-    methods: methods(c.env),
-    linkedProviders: data
-      ? (
-          await c.env.DB.prepare(
-            "SELECT provider_id FROM account WHERE user_id = ?",
-          )
-            .bind(data.user.id)
-            .all<{ provider_id: string }>()
-        ).results.map((row) => row.provider_id)
-      : [],
-    user: data ? { name: data.user.name, email: data.user.email } : null,
-    profile: data ? await getProfile(c.env.DB, data.user.id) : null,
+    methods: enabled,
+    linkedProviders: providers.results.map((row) => row.provider_id),
+    user: { name: data.user.name, email: data.user.email },
+    profile,
   });
 });
 app.get("/api/u/:username", async (c) =>
@@ -314,15 +322,19 @@ app.get("/api/me/export", async (c) => {
         "SELECT username FROM social_block b JOIN profile p ON p.user_id=b.blocked WHERE b.blocker=?",
       )
       .bind(owner),
+    db
+      .prepare(
+        "SELECT r.id,r.post,p.username AS reported_profile,r.reason,r.status,r.created_at FROM social_report r LEFT JOIN profile p ON p.user_id=r.person WHERE r.reporter=?",
+      )
+      .bind(owner),
   ]);
   c.header("Content-Disposition", 'attachment; filename="suni-diary.json"');
   return c.json({
     version: 1,
     social: Object.fromEntries(
-      ["posts", "bookmarks", "likes", "following", "blocked"].map((k, i) => [
-        k,
-        socialData[i].results,
-      ]),
+      ["posts", "bookmarks", "likes", "following", "blocked", "reports"].map(
+        (k, i) => [k, socialData[i].results],
+      ),
     ),
     exported_at: new Date().toISOString(),
     user: { name: c.get("name"), email: c.get("email") },

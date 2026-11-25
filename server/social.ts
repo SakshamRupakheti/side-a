@@ -3,7 +3,9 @@ import {
   momentJson,
   postFields,
   feedQuery,
+  wallQuery,
 } from "./social-feed";
+import { socialBadges, type BadgeId } from "../shared/social";
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
@@ -120,6 +122,41 @@ social.get("/p/:id", async (c) => {
     .first();
   if (!row) throw missing();
   return c.json(project(row));
+});
+social.get("/wall/:section", async (c) => {
+  const section = z.enum(["ranked", "fresh"]).parse(c.req.param("section"));
+  const fresh = section === "fresh";
+  const raw = c.req.query("after");
+  let cursor: [string | number, string] | undefined;
+  if (raw !== undefined) {
+    try {
+      const value = JSON.parse(atob(z.string().max(200).parse(raw)));
+      cursor = fresh
+        ? z.tuple([z.string().min(1).max(32), handle]).parse(value)
+        : z.tuple([z.number().int().min(-5).max(0), handle]).parse(value);
+    } catch {
+      throw new HTTPException(400, { message: "Invalid wall cursor." });
+    }
+  }
+  const { results } = await c.env.DB.prepare(wallQuery(fresh, !!cursor))
+    .bind(await viewer(c), ...(cursor ?? []))
+    .all();
+  const last = results[11];
+  return c.json({
+    people: results.slice(0, 12).map((row) => ({
+      username: row.username,
+      display_name: row.display_name,
+      following: row.following,
+      badges: (Object.keys(socialBadges) as BadgeId[]).filter(
+        (key) => row[key] === 1,
+      ),
+      covers: JSON.parse(String(row.covers)),
+    })),
+    next:
+      results.length > 12
+        ? btoa(JSON.stringify([last.sort_key, last.username]))
+        : null,
+  });
 });
 social.get("/people", async (c) => {
   const actor = await viewer(c),
@@ -318,6 +355,9 @@ export async function socialDocument(c: C) {
       .replaceAll(">", "&gt;");
   return new HTMLRewriter()
     .on("title", { element: (e) => void e.setInnerContent(title) })
+    .on('meta[property="og:title"],meta[property="og:description"]', {
+      element: (e) => void e.remove(),
+    })
     .on("head", {
       element: (e) =>
         void e.append(

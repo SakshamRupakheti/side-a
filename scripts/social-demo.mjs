@@ -17,7 +17,10 @@ const a = cookies.alice,
 const entry = (
   await req("/me/entries", a, "POST", { ...listen, shared: true }, 201)
 ).data.id;
-await req("/me/profile", a, "PUT", profile("alice", true));
+await req("/me/profile", a, "PUT", {
+  ...profile("alice", true),
+  leaderboard_opt_in: true,
+});
 await req("/me/profile", b, "PUT", profile("bob", true));
 await req(
   "/me/entries",

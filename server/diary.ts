@@ -32,6 +32,7 @@ export const profileInput = z.object({
   show_shows: z.boolean(),
   show_replays: z.boolean(),
   show_badges: z.boolean(),
+  leaderboard_opt_in: z.boolean().optional(),
 });
 export const entryInput = z.object({
   import_key: z.string().uuid().optional(),
@@ -122,13 +123,16 @@ const fields =
   "username, display_name, bio, published, show_finished, show_shows, show_replays, show_badges";
 export async function getProfile(db: D1Database, owner: string) {
   const row = await db
-    .prepare("SELECT " + fields + " FROM profile WHERE user_id=?")
+    .prepare(
+      "SELECT " + fields + ", leaderboard_opt_in FROM profile WHERE user_id=?",
+    )
     .bind(owner)
     .first<Profile>();
   return (
     row && {
       ...row,
       published: !!row.published,
+      leaderboard_opt_in: !!row.leaderboard_opt_in,
       show_finished: !!row.show_finished,
       show_shows: !!row.show_shows,
       show_replays: !!row.show_replays,
@@ -136,7 +140,15 @@ export async function getProfile(db: D1Database, owner: string) {
     }
   );
 }
-export async function saveProfile(db: D1Database, owner: string, p: Profile) {
+export async function saveProfile(
+  db: D1Database,
+  owner: string,
+  p: z.infer<typeof profileInput>,
+) {
+  const columns =
+    p.leaderboard_opt_in === undefined
+      ? fields
+      : fields + ", leaderboard_opt_in";
   const values = [
     p.username,
     p.display_name,
@@ -146,14 +158,17 @@ export async function saveProfile(db: D1Database, owner: string, p: Profile) {
     +p.show_shows,
     +p.show_replays,
     +p.show_badges,
+    ...(p.leaderboard_opt_in === undefined ? [] : [+p.leaderboard_opt_in]),
   ];
   try {
     await db
       .prepare(
         "INSERT INTO profile(user_id," +
-          fields +
-          ") VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET " +
-          fields
+          columns +
+          ") VALUES (?," +
+          values.map(() => "?").join(",") +
+          ") ON CONFLICT(user_id) DO UPDATE SET " +
+          columns
             .split(", ")
             .map((f) => f + "=excluded." + f)
             .join(","),

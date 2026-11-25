@@ -140,6 +140,7 @@ export function ProfileForm({
     show_shows: "Shows explored",
     show_replays: "Replay count",
     show_badges: "Milestone badges",
+    leaderboard_opt_in: "Rank my published profile on the Listening Wall",
   } as const;
   return (
     <Modal
@@ -197,7 +198,11 @@ export function ProfileForm({
               {switches[k]}
             </label>
           ))}
-          <small>Public statistics and badges count shared entries only.</small>
+          <small>
+            Wall rank uses sharing badges earned from your published podcast
+            postcards. You can leave the ranking at any time. Published
+            postcards still appear in Fresh Voices.
+          </small>
         </fieldset>
         <button className="button primary" disabled={act.busy}>
           Save profile

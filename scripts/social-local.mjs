@@ -27,7 +27,7 @@ if (mode === "moderate") {
       "--persist-to",
       storage,
       "--command",
-      "SELECT id,CASE WHEN post IS NULL THEN 'profile' ELSE 'post' END AS kind,reason,created_at,status FROM social_report WHERE status='open' ORDER BY created_at,id LIMIT 30",
+      "SELECT r.id,CASE WHEN r.post IS NULL THEN 'profile' ELSE 'post' END AS kind,CASE WHEN r.post IS NULL THEN '/u/'||p.username ELSE '/p/'||r.post END AS review_path,r.reason,r.created_at,r.status FROM social_report r LEFT JOIN profile p ON p.user_id=r.person WHERE r.status='open' ORDER BY r.created_at,r.id LIMIT 30",
     ]);
   } else {
     if (
